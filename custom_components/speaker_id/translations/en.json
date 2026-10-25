@@ -71,7 +71,7 @@
           "threshold": "For people without an own threshold. Typically 0.5-0.7.",
           "margin": "How much the best person must beat the second one (0.05 = 5 points). Larger for similar voices, e.g. siblings.",
           "min_speech": "Shorter utterances are always \"unknown\": too little speech to recognise a voice.",
-          "probable_threshold": "An unrecognized voice with at least this similarity is reported as \"probably <person>\" (sensor attributes probable_person and probable_user_id, Assist Router answers \"I think it is Anna\"). Never runs as that person's user."
+          "probable_threshold": "An unrecognized voice with at least this similarity is reported as \"probably Anna\" (sensor attributes probable_person and probable_user_id, Assist Router answers \"I think it is Anna\"). Never runs as that person's user."
         }
       }
     },

@@ -13,7 +13,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SpeakerIdConfigEntry, device_info
-from .const import SIGNAL_RESULT
+from .const import ENTITY_IDS, SIGNAL_RESULT
 from .speaker import SpeakerResult
 
 UNKNOWN = "unknown"
@@ -35,6 +35,7 @@ class LastSpeakerSensor(SensorEntity):
     def __init__(self, entry: SpeakerIdConfigEntry) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}-last_speaker"
+        self.entity_id = ENTITY_IDS["last_speaker"]  # the same in every HA language
         self._attr_device_info = device_info(entry)
         self._result: SpeakerResult | None = None
 

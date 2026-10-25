@@ -50,6 +50,9 @@ def enrollment_reply(hass: HomeAssistant) -> tuple[str, bool] | None:
         return None
     done = int(result.enrollment.get("done", 0))
     count = int(result.enrollment.get("count", 0))
+    # all samples of the speaker (an older service without them: this series only)
+    total = int(result.enrollment.get("total", done))
+    target = int(result.enrollment.get("target", count))
     language = (hass.config.language or "en").split("-")[0]
     text = MESSAGES.get(language, MESSAGES["en"])
     finished = bool(result.sample_added and done >= count)
@@ -58,11 +61,12 @@ def enrollment_reply(hass: HomeAssistant) -> tuple[str, bool] | None:
         if (guide := entry.runtime_data.guide) is not None and guide.active:
             guide.agent_replied(finished)  # the guide will not repeat the message
             name = guide.name
+    values = {"name": name, "done": done, "count": count, "total": total, "target": target}
     if not result.sample_added:
         return text["short"], True
     if finished:
-        return text["done"].format(name=name, done=done, count=count), False
-    return text["sample"].format(name=name, done=done, count=count), True
+        return text["done"].format(**values), False
+    return text["sample"].format(**values), True
 
 
 async def async_announce_last(

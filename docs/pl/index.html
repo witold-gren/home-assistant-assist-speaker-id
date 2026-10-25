@@ -377,7 +377,8 @@ docker run -d --name speaker-id --restart unless-stopped \
     agent docelowy dla „Agenta z mówcą”, linia promptu (domyślnie <code>Pyta: {name}.</code>) i
     czy wykonywać polecenia jako użytkownik HA mówcy (<code>context.user_id</code>).</li>
   <li><strong>Progi rozpoznawania:</strong> próg wspólny, margines, minimum mowy i próg każdej
-    osoby. Zapis trafia do usługi i działa od następnego zdania, bez restartu.</li>
+    osoby. Zapis trafia do usługi i działa od następnego zdania, bez restartu. Do tego
+    <strong>Prawdopodobny mówca od</strong> (domyślnie 0.40, zapis w HA) - niżej.</li>
 </ul>
 
 <h2 id="pipeline">6. Ustawienie pipeline'u</h2>
@@ -423,13 +424,21 @@ data:
     zdanie.” i słucha dalej.</li>
   <li>Za krótkie zdanie (poniżej 1,5 s mowy) nie liczy się – satelita poprosi o dłuższe. Po
     ciszy albo urwanej rozmowie sama zapyta ponownie, a po 3 próbach bez nowej próbki zakończy.</li>
-  <li>Po ostatniej próbce: „Gotowe, nagrano 10 próbek głosu: Anna.”. Wzorzec działa od razu.</li>
+  <li>Po ostatniej próbce: „Gotowe. Wzorzec głosu: Anna, liczba próbek: 10.”. Wzorzec działa od razu.</li>
 </ol>
 <p>Bez pola <code>satellite</code> nagrywanie też działa, ale każde zdanie zaczyna się od słowa
 wybudzającego. Postęp widać w atrybucie <code>enrollment</code> sensora „Ostatni mówca”. Przerwanie:
 <code>speaker_id.stop_enrollment</code>.</p>
-<p><strong>Nieudane nagrywanie?</strong> Dograj próbki tą samą akcją (nowe dochodzą do starych)
-albo zacznij od zera: <code>speaker_id.delete_speaker</code> i nagrywanie jeszcze raz. Pojedyncze
+<p><strong>Dogrywanie próbek seriami.</strong> Uruchom tę samą akcję jeszcze raz: nowe próbki dochodzą
+do zapisanych, a licznik liczy wszystkie – druga seria po 10 zaczyna się od „Dogrywam próbki głosu:
+Anna, zapisane są 10, nagrywam do 20” i mówi „Nagrano 11 z 20”, trzecia „Nagrano 24 z 30”. Wzorzec to
+średnia wszystkich próbek, więc 3 serie przez kilka dni (różne satelity, pory dnia) dają dużo
+dokładniejszy wzorzec; po każdej serii skalibruj progi. Każda próbka zachowuje swoje nagranie w
+usłudze (<code>/data/recordings/&lt;osoba&gt;/</code>, ok. 0,2 MB na próbkę), więc
+<code>speaker_id.rebuild_voiceprints</code> przeliczy później wszystkie próbki od nowa, np. po zmianie
+modelu. Próbki sprzed wersji 0.2.0 nie mają nagrań i zostają bez zmian.</p>
+<p><strong>Nieudane nagrywanie?</strong> Dograj próbki tą samą akcją albo zacznij od zera:
+<code>speaker_id.reset_speaker</code> (usuwa próbki i nagrania, osoba zostaje) i nagrywanie jeszcze raz. Pojedyncze
 zdanie dodasz po fakcie akcją <code>speaker_id.add_last_sample</code>: ostatnia wypowiedź (najwyżej
 sprzed 10 min) staje się próbką wskazanej osoby.</p>
 <p class="tip"><strong>Dobre próbki:</strong> nagrywaj przez tę satelitę i z tej odległości, z
@@ -589,14 +598,16 @@ brat” to konkretna osoba z rodziny.</p>
 
 <h3>Automatyzacje</h3>
 <p>Sensor <strong>„Ostatni mówca”</strong> (stan: imię albo <code>unknown</code>; atrybuty:
-<code>speaker</code>, <code>name</code>, <code>person</code>, <code>score</code>,
-<code>scores</code>, <code>speech_seconds</code>, <code>enrollment</code>) i zdarzenie
+<code>speaker</code>, <code>name</code>, <code>person</code>, <code>user_id</code>,
+<code>score</code>, <code>scores</code>, <code>speech_seconds</code>, <code>probable</code>,
+<code>probable_name</code>, <code>probable_person</code>, <code>probable_user_id</code>,
+<code>enrollment</code>) i zdarzenie
 <code>speaker_id_identified</code>. Treść wypowiedzi celowo nie trafia do historii.</p>
 <p>Automatyzacje z wyzwalaczem zdaniowym HA uruchamia przed agentem, więc nie dostają mówcy wprost.
 Sensor zmienia się jednak w tym samym poleceniu, tuż przed nimi – wynik sprzed kilku sekund to
 mówca tego zdania. Wygodne makro w <code>/config/custom_templates/mowca.jinja</code>:</p>
 <pre><code>{% macro mowca(max_s=20) -%}
-  {%- set s = states.sensor.assist_speaker_id_ostatni_mowca -%}
+  {%- set s = states.sensor.speaker_id_last_speaker -%}
   {%- if s and (now() - s.last_updated).total_seconds() &lt;= max_s -%}
     {{- s.attributes.speaker or '' -}}
   {%- endif -%}
@@ -616,8 +627,18 @@ actions:
       - set_conversation_response: "Dzwonię na Twój telefon."
     else:
       - set_conversation_response: "Nie wiem, kto pyta. Czyj telefon mam znaleźć?"</code></pre>
-<p>Nazwa sensora zależy od języka HA; po angielsku to
-<code>sensor.assist_speaker_id_last_speaker</code>.</p>
+<p>Identyfikatory encji są takie same w każdym języku HA: <code>sensor.speaker_id_last_speaker</code>,
+<code>stt.speaker_id_speech_to_text</code>, <code>conversation.speaker_id_agent</code>. Id z wersji 0.1.x
+(zbudowane z polskiej nazwy) zmieniają się same - sprawdź potem potoki Assist.</p>
+<h3 id="prawdopodobny">Prawdopodobny mówca</h3>
+<p>Gdy głos nie osiągnie progu swojej osoby (albo jest za blisko drugiej), wynik to
+<code>unknown</code>, ale najbardziej podobna osoba jest podawana jako <strong>prawdopodobna</strong>,
+jeśli podobieństwo wynosi co najmniej <strong>Prawdopodobny mówca od</strong> (domyślnie 0.40):
+atrybuty <code>probable</code>, <code>probable_name</code>, <code>probable_person</code>,
+<code>probable_user_id</code>. Assist Router odpowiada wtedy „Wydaje mi się, że pyta Zosia. Dzisiaj
+masz…”. Prawdopodobny mówca nigdy nie wykonuje poleceń jako użytkownik HA tej osoby -
+<code>Context</code> w HA nie ma miejsca na dodatkowe pola, więc automatyzacje czytają go z
+sensora: <code>state_attr('sensor.speaker_id_last_speaker', 'probable_person')</code>.</p>
 
 <h2 id="ogloszenia">10. Ogłoszenia Twoim głosem</h2>
 <p>„OK Nabu, <strong>ogłoszenie</strong>, dzieci, proszę przyjść na obiad.” Pozostałe głośniki
@@ -653,7 +674,9 @@ zamiast czytać tekst syntezą mowy. Słychać, kto woła i jakim tonem.</p>
   <tr><td><code>speaker_id.add_last_sample</code></td><td>ostatnia wypowiedź (najwyżej sprzed 10 min) jako próbka osoby</td></tr>
   <tr><td><code>speaker_id.calibrate</code></td><td>raport kalibracji i propozycje progów; <code>apply: true</code> zapisuje progi</td></tr>
   <tr><td><code>speaker_id.set_speaker</code></td><td>zmiana nazwy i własnego progu osoby</td></tr>
-  <tr><td><code>speaker_id.delete_speaker</code></td><td>usuwa wzorzec osoby</td></tr>
+  <tr><td><code>speaker_id.reset_speaker</code></td><td>usuwa wszystkie próbki i nagrania osoby oraz jej własny próg; osoba zostaje</td></tr>
+  <tr><td><code>speaker_id.rebuild_voiceprints</code></td><td>liczy każdą próbkę od nowa z jej nagrania (raport: przeliczone / bez nagrania / bez zmian)</td></tr>
+  <tr><td><code>speaker_id.delete_speaker</code></td><td>usuwa wzorzec osoby razem z nagraniami</td></tr>
   <tr><td><code>speaker_id.list_speakers</code></td><td>lista osób z liczbą próbek i progami</td></tr>
   <tr><td><code>speaker_id.announce_last</code></td><td>odtwarza ostatnią wypowiedź jako ogłoszenie</td></tr>
 </table></div>
@@ -690,12 +713,14 @@ ani niczego, co wymaga uwierzytelnienia.</p>
 <p>Wzorzec głosu to dane biometryczne (RODO, art. 9). Dlatego:</p>
 <ul>
   <li>wszystko działa <strong>lokalnie</strong>, bez chmury;</li>
-  <li>usługa zapisuje <strong>tylko wektory</strong> (<code>/data/speakers.json</code>), bez nagrań
-    (wektor opisuje barwę głosu, ale nie jest nagraniem);</li>
+  <li>usługa zapisuje wektory (<code>/data/speakers.json</code>) i <strong>nagrania próbek
+    głosu</strong> (<code>/data/recordings/</code>, potrzebne do przeliczenia wzorców); nic nie
+    wychodzi poza Twoją sieć;</li>
   <li>ostatnia wypowiedź jest trzymana wyłącznie w pamięci, najwyżej 10 minut (do
     <code>add_last_sample</code> i ogłoszeń);</li>
   <li>treść wypowiedzi nie trafia do historii sensora;</li>
-  <li><code>delete_speaker</code> usuwa wzorzec osoby w całości;</li>
+  <li><code>delete_speaker</code> usuwa wzorzec osoby razem z nagraniami, a
+    <code>reset_speaker</code> jej próbki i nagrania;</li>
   <li>domownicy, a przy dzieciach rodzice, powinni wiedzieć o rozpoznawaniu i się na nie zgodzić.</li>
 </ul>
 

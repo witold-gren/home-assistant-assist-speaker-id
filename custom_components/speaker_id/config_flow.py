@@ -19,10 +19,12 @@ from .const import (
     CONF_API_PORT,
     CONF_API_TOKEN,
     CONF_PEOPLE,
+    CONF_PROBABLE_THRESHOLD,
     CONF_PROMPT,
     CONF_SET_USER,
     DEFAULT_API_PORT,
     DEFAULT_PORT,
+    DEFAULT_PROBABLE_THRESHOLD,
     DOMAIN,
     prompt_for,
 )
@@ -140,6 +142,10 @@ class SpeakerIdOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return self.async_show_menu(step_id="init", menu_options=["people", "thresholds"])
 
+    @property
+    def _probable_threshold(self) -> float:
+        return self.config_entry.options.get(CONF_PROBABLE_THRESHOLD, DEFAULT_PROBABLE_THRESHOLD)
+
     async def async_step_thresholds(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -167,22 +173,34 @@ class SpeakerIdOptionsFlow(OptionsFlow):
             except SpeakerIdError:
                 errors["base"] = "cannot_connect"
             else:
+                probable = user_input[CONF_PROBABLE_THRESHOLD]
+                if probable != self._probable_threshold:
+                    # kept in Home Assistant (not in the service); reloads the integration
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        options={**self.config_entry.options, CONF_PROBABLE_THRESHOLD: probable},
+                    )
                 return self.async_abort(reason="thresholds_saved")
         fields: dict[Any, Any] = {
             vol.Required("threshold"): _slider(0.3, 0.95, 0.01),
             vol.Required("margin"): _slider(0.0, 0.3, 0.01),
             vol.Required("min_speech"): _slider(0.5, 3.0, 0.1, "s"),
+            vol.Required(CONF_PROBABLE_THRESHOLD): _slider(0.2, 0.9, 0.01),
         }
         for key in own:
             fields[vol.Optional(key)] = _slider(0.3, 0.95, 0.01)
-        suggested = {**settings, **{k: s["threshold"] for k, s in own.items() if s["threshold"]}}
+        suggested = {
+            **settings,
+            CONF_PROBABLE_THRESHOLD: self._probable_threshold,
+            **{k: s["threshold"] for k, s in own.items() if s["threshold"]},
+        }
         return self.async_show_form(
             step_id="thresholds",
             data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
             errors=errors,
             description_placeholders={
                 "speakers": "\n".join(
-                    f"- {s['name']}: {s['samples']} · "
+                    f"- {s['name']}: {s['samples']} ({s.get('recordings', 0)}) · "
                     + (f"{s['threshold']:.2f}" if s["threshold"] else "—")
                     for s in speakers
                 )
@@ -203,7 +221,8 @@ class SpeakerIdOptionsFlow(OptionsFlow):
         if user_input is not None:
             people = {voices[k]: v for k, v in user_input.items() if k in voices and v}
             options = {k: v for k, v in user_input.items() if k not in voices}
-            return self.async_create_entry(data={**options, CONF_PEOPLE: people})
+            kept = {k: v for k, v in entry.options.items() if k == CONF_PROBABLE_THRESHOLD}
+            return self.async_create_entry(data={**kept, **options, CONF_PEOPLE: people})
 
         current = entry.options
         people = current.get(CONF_PEOPLE, {})

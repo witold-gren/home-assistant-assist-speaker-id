@@ -173,6 +173,8 @@ The integration options (Configure) are a menu with two entries:
 - **Recognition thresholds:** shared threshold, margin, minimum speech and each person's
   threshold. Saved in the service and effective immediately, without a restart (what the
   numbers mean: [How to read scores and thresholds](#how-to-read-scores-and-thresholds)).
+  Also **Probable speaker from** (default 0.40, kept in HA): see
+  [Probable speaker](#probable-speaker).
 
 ## Usage
 
@@ -191,6 +193,8 @@ The integration options (Configure) are a menu with two entries:
      speaker = get_speaker(hass) if get_speaker else None
      if speaker and speaker.speaker:
          ...  # speaker.speaker (id), .name, .person, .user_id, .score
+     elif speaker and speaker.probable:
+         ...  # not certain: .probable (id), .probable_name, .probable_person
      ```
 
      This is what [Assist Router](https://github.com/witold-gren/home-assistant-assist-router) does:
@@ -204,7 +208,8 @@ The integration options (Configure) are a menu with two entries:
      enrollment and does not make the user wait for the model's answer. "Agent with speaker"
      and Assist Router do this themselves.
 3. **Automations:** the "Last speaker" sensor (state: name or `unknown`; attributes:
-   `speaker`, `name`, `person`, `score`, `scores`, `speech_seconds`, `enrollment`) and the
+   `speaker`, `name`, `person`, `user_id`, `score`, `scores`, `speech_seconds`, `probable`,
+   `probable_name`, `probable_person`, `probable_user_id`, `enrollment`) and the
    `speaker_id_identified` event. The text of the utterance deliberately does not go into the
    history. HA runs automations with Assist sentence triggers before the agent, so they do not
    get the speaker directly. The sensor, however, changes within the same command, just before
@@ -213,7 +218,7 @@ The integration options (Configure) are a menu with two entries:
 
    ```jinja
    {% macro speaker(max_s=20) -%}
-     {%- set s = states.sensor.assist_speaker_id_last_speaker -%}
+     {%- set s = states.sensor.speaker_id_last_speaker -%}
      {%- if s and (now() - s.last_updated).total_seconds() <= max_s -%}
        {{- s.attributes.speaker or '' -}}
      {%- endif -%}
@@ -221,9 +226,23 @@ The integration options (Configure) are a menu with two entries:
    ```
 
    In an automation: `{% from 'speaker.jinja' import speaker %}{% if speaker() == 'anna' %}…`,
-   e.g. "where is my phone" then rings the speaker's phone. The sensor's entity id depends on
-   the HA language; in English it is `sensor.assist_speaker_id_last_speaker`. After creating
-   the file, run the `homeassistant.reload_custom_templates` action.
+   e.g. "where is my phone" then rings the speaker's phone. The entity ids are the same in
+   every HA language: `sensor.speaker_id_last_speaker`, `stt.speaker_id_speech_to_text`,
+   `conversation.speaker_id_agent` (ids of version 0.1.x, built from the translated name, are
+   renamed automatically; remember to check the pipelines). After creating the file, run the
+   `homeassistant.reload_custom_templates` action.
+
+### Probable speaker
+
+When a voice does not reach its person's threshold (or is too close to the runner-up), the
+result is `unknown`, but the most similar person is still reported as **probable** when the
+similarity is at least **Probable speaker from** (options → Recognition thresholds, default
+0.40): attributes `probable`, `probable_name`, `probable_person`, `probable_user_id`. Use it
+where a guess is fine and say it out loud - Assist Router answers "I think it is Anna asking.
+Today you have…". A probable speaker never runs commands as that person's HA user
+(`context.user_id` stays unchanged) - the HA `Context` has no room for extra fields, so
+automations read the probable person from the sensor:
+`state_attr('sensor.speaker_id_last_speaker', 'probable_person')`.
 
 ## Announcements (intercom): your recording instead of synthesis
 
@@ -261,10 +280,12 @@ changes, instead of reading the text with a Piper voice.
 
 | Action | What it does |
 |---|---|
-| `speaker_id.start_enrollment` | `speaker: anna`, `name: Anna`, `count: 10`, optionally `satellite: assist_satellite.…`: the next 10 utterances with at least 1.5 s of speech become Anna's samples. **With `satellite` the speaker guides the enrollment itself**, without the wake word. It asks for the first sentence, and after each one says once "Recorded 3 of 10. Next sentence." and keeps listening right away, without executing the command. It asks for a longer one when the sentence was too short, and asks again after silence or a broken-off conversation. It finishes after the last sample ("Done, …") or after 3 attempts without a new one. Without `satellite` every sentence starts with the wake word. Progress is visible in the sensor's `enrollment` attribute. |
+| `speaker_id.start_enrollment` | `speaker: anna`, `name: Anna`, `count: 10`, optionally `satellite: assist_satellite.…`: the next 10 utterances with at least 1.5 s of speech become Anna's samples. **With `satellite` the speaker guides the enrollment itself**, without the wake word. It asks for the first sentence, and after each one says once "Recorded 3 of 10. Next sentence." and keeps listening right away, without executing the command. It asks for a longer one when the sentence was too short, and asks again after silence or a broken-off conversation. It finishes after the last sample ("Done, …") or after 3 attempts without a new one. Without `satellite` every sentence starts with the wake word. Progress is visible in the sensor's `enrollment` attribute. **Another series adds to the saved samples** and counts all of them: a third series of 10 says "Recorded 24 of 30". |
 | `speaker_id.add_last_sample` | the last utterance (at most 10 min old) as a sample of a person |
 | `speaker_id.calibrate` | for each person compares their samples with the samples of the others and suggests a threshold; with `apply: true` saves the thresholds |
-| `speaker_id.set_speaker` / `delete_speaker` / `list_speakers` | name and own threshold / delete a voiceprint / list |
+| `speaker_id.reset_speaker` | deletes all samples and recordings of a person (and their own threshold), keeps the person - enrollment starts over |
+| `speaker_id.rebuild_voiceprints` | computes every sample again from its saved recording (e.g. after a model change); samples without a recording stay as they are |
+| `speaker_id.set_speaker` / `delete_speaker` / `list_speakers` | name and own threshold / delete a voiceprint with its recordings / list (samples, recordings) |
 
 **Tips:**
 - Record through the satellites and from the distance a household member usually speaks from.
@@ -273,6 +294,12 @@ changes, instead of reading the text with a Piper voice.
 - Calibration shows `separable: false` when the samples of two people overlap. This is common
   with siblings: record more samples or raise `margin`.
 - Children's voices change with age, so record new samples every few months.
+- **Add samples in series** (e.g. 3 × 10 over a few days, from different satellites): the
+  voiceprint is the mean of all samples, so it gets more precise with every series. Run
+  `calibrate` after each series. Every sample keeps its recording in the service
+  (`/data/recordings/<person>/`, ~0.2 MB per sample) until `reset_speaker` or
+  `delete_speaker`, so voiceprints can be built again later (`rebuild_voiceprints`). Samples
+  from versions before 0.2.0 have no recording.
 
 The service's HTTP API (port 10351, described in `speaker_id/wyoming_speaker_id/http_api.py`)
 also supports uploading WAV recordings (`POST /api/speakers/{id}/samples`) and testing
@@ -397,11 +424,13 @@ after it, or do not use `apply`.
 
 A voiceprint is biometric data (GDPR Article 9):
 - everything runs locally;
-- the service stores only vectors (`/data/speakers.json`), no recordings;
+- the service stores vectors (`/data/speakers.json`) and the recordings of the voice samples
+  (`/data/recordings/`), never outside your network;
 - the last utterance is kept only in memory, for at most 10 minutes (for
   `add_last_sample`);
 - household members should know about the recognition and agree to it;
-- `delete_speaker` deletes a person's voiceprint.
+- `delete_speaker` deletes a person's voiceprint and recordings, `reset_speaker` only the samples
+  and recordings.
 
 ## Development
 

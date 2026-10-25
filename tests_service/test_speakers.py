@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -137,3 +140,81 @@ def test_settings_persist_and_win_over_startup(store: SpeakerStore) -> None:
 def test_settings_ranges(store: SpeakerStore, kwargs: dict) -> None:
     with pytest.raises(ValueError):
         store.set_settings(**kwargs)
+
+
+# --- recordings ---
+
+
+def test_recordings_deleted_with_sample_and_speaker(store: SpeakerStore) -> None:
+    store.upsert("kasia", "Kasia", None)
+    for seed in range(2):
+        store.add_sample(
+            "kasia", FakeEmbedder().embed(voice(300, seed=seed)), 2.0, "", voice(300, seed=seed)
+        )
+    folder = store.recordings / "kasia"
+    first = store.speakers["kasia"].samples[0].recording
+    assert first and (folder / first).is_file()
+
+    assert store.delete_sample("kasia", 0)
+    assert not (folder / first).exists()
+    assert len(list(folder.glob("*.wav"))) == 1
+
+    assert store.delete("kasia")
+    assert not folder.exists()
+
+
+def test_recording_survives_reload(store: SpeakerStore, tmp_path: Path) -> None:
+    store.upsert("kasia", "Kasia", None)
+    store.add_sample("kasia", FakeEmbedder().embed(voice(300)), 2.0, "", voice(300))
+    again = SpeakerStore(tmp_path / "speakers.json", threshold=0.8, margin=0.05)
+    sample = again.speakers["kasia"].samples[0]
+    assert sample.recording == store.speakers["kasia"].samples[0].recording
+    assert again.speakers["kasia"].summary()["recordings"] == 1
+
+
+def test_old_store_without_recordings_loads(tmp_path: Path) -> None:
+    path = tmp_path / "speakers.json"
+    path.write_text(
+        json.dumps(
+            {"version": 1, "speakers": {"jan": {"name": "Jan", "samples": [
+                {"embedding": [1.0, 0.0], "added": "2026-10-01T10:00:00+00:00", "seconds": 2.0}
+            ]}}}
+        ),
+        encoding="utf-8",
+    )  # fmt: skip
+    store = SpeakerStore(path, threshold=0.8, margin=0.05)
+    assert store.speakers["jan"].samples[0].recording == ""
+    assert store.speakers["jan"].summary()["recordings"] == 0
+
+
+def test_rebuild_embeds_recordings_again(store: SpeakerStore) -> None:
+    """A "new model" (another embedder) - samples with a recording get new embeddings,
+    older samples without a recording keep theirs."""
+    embedder = FakeEmbedder()
+    store.upsert("kasia", "Kasia", None)
+    store.add_sample("kasia", embedder.embed(voice(300, seed=1)), 2.0, "", voice(300, seed=1))
+    store.add_sample("kasia", embedder.embed(voice(300, seed=2)), 2.0)  # no recording
+    old = store.speakers["kasia"].samples[1].embedding.copy()
+
+    def other_model(speech: np.ndarray) -> np.ndarray:
+        vector = np.zeros(len(old), dtype=np.float32)
+        vector[0] = 1.0
+        return vector
+
+    report = store.rebuild(other_model, max_seconds=8.0)
+
+    assert report["kasia"] == {"rebuilt": 1, "without_recording": 1, "kept": 0}
+    samples = store.speakers["kasia"].samples
+    assert samples[0].embedding[0] == 1.0
+    assert np.array_equal(samples[1].embedding, old)
+
+
+def test_rebuild_keeps_sample_when_recording_is_missing(store: SpeakerStore) -> None:
+    store.upsert("kasia", "Kasia", None)
+    store.add_sample("kasia", FakeEmbedder().embed(voice(300)), 2.0, "", voice(300))
+    sample = store.speakers["kasia"].samples[0]
+    (store.recordings / "kasia" / sample.recording).unlink()
+
+    report = store.rebuild(FakeEmbedder().embed, max_seconds=8.0)
+
+    assert report["kasia"] == {"rebuilt": 0, "without_recording": 0, "kept": 1}

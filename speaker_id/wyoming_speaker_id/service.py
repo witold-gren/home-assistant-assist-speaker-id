@@ -31,13 +31,23 @@ class Settings:
 
 @dataclass
 class Enrollment:
+    """One series of ``count`` samples; ``start`` = samples the speaker already had, so a
+    second series of 10 counts „11 of 20” (``total`` of ``target``)."""
+
     speaker: str
     count: int
     done: int = 0
     scores: list[float | None] = field(default_factory=list)
+    start: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        return {"speaker": self.speaker, "count": self.count, "done": self.done}
+        return {
+            "speaker": self.speaker,
+            "count": self.count,
+            "done": self.done,
+            "total": self.start + self.done,
+            "target": self.start + self.count,
+        }
 
 
 @dataclass
@@ -90,7 +100,7 @@ class SpeakerService:
         if enrollment is not None:
             if embedding is not None and utt.speech_seconds >= self.settings.enroll_min_speech:
                 score = self.store.add_sample(
-                    enrollment.speaker, embedding, utt.speech_seconds, text
+                    enrollment.speaker, embedding, utt.speech_seconds, text, utt.audio
                 )
                 enrollment.done += 1
                 enrollment.scores.append(score)
@@ -130,7 +140,9 @@ class SpeakerService:
         last = self.last()
         if last is None or last.embedding is None:
             raise LookupError("no recent utterance with enough speech")
-        return self.store.add_sample(speaker_id, last.embedding, last.speech_seconds, last.text)
+        return self.store.add_sample(
+            speaker_id, last.embedding, last.speech_seconds, last.text, last.audio
+        )
 
     # --- upstream info cache ---
 

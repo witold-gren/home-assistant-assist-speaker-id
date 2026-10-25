@@ -173,7 +173,8 @@ Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:
   - czy wykonywać polecenia jako użytkownik HA mówcy (`context.user_id`).
 - **Progi rozpoznawania:** próg wspólny, margines, minimum mowy i próg każdej osoby.
   Zapisuje się w usłudze i działa od razu, bez restartu (opis liczb:
-  [Jak czytać wyniki i progi](#jak-czytać-wyniki-i-progi)).
+  [Jak czytać wyniki i progi](#jak-czytać-wyniki-i-progi)). Do tego **Prawdopodobny mówca od**
+  (domyślnie 0.40, zapis w HA): zobacz [Prawdopodobny mówca](#prawdopodobny-mówca).
 
 ## Użycie
 
@@ -192,6 +193,8 @@ Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:
      speaker = get_speaker(hass) if get_speaker else None
      if speaker and speaker.speaker:
          ...  # speaker.speaker (id), .name, .person, .user_id, .score
+     elif speaker and speaker.probable:
+         ...  # not certain: .probable (id), .probable_name, .probable_person
      ```
 
      Tak robi [Assist Router](https://github.com/witold-gren/home-assistant-assist-router): pytanie
@@ -204,7 +207,8 @@ Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:
      nagrywania i nie każe czekać na odpowiedź modelu. „Agent z mówcą” i Assist Router
      robią to same.
 3. **Automatyzacje:** sensor „Ostatni mówca” (stan: imię albo `unknown`; atrybuty:
-   `speaker`, `name`, `person`, `score`, `scores`, `speech_seconds`, `enrollment`) i
+   `speaker`, `name`, `person`, `user_id`, `score`, `scores`, `speech_seconds`, `probable`,
+   `probable_name`, `probable_person`, `probable_user_id`, `enrollment`) i
    zdarzenie `speaker_id_identified`. Treść wypowiedzi celowo nie trafia do historii.
    Automatyzacje ze zdaniami Assist HA uruchamia przed agentem, więc mówcy nie dostają
    wprost. Sensor zmienia się jednak w tym samym poleceniu, tuż przed nimi. Wynik sprzed
@@ -213,7 +217,7 @@ Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:
 
    ```jinja
    {% macro mowca(max_s=20) -%}
-     {%- set s = states.sensor.assist_speaker_id_ostatni_mowca -%}
+     {%- set s = states.sensor.speaker_id_last_speaker -%}
      {%- if s and (now() - s.last_updated).total_seconds() <= max_s -%}
        {{- s.attributes.speaker or '' -}}
      {%- endif -%}
@@ -221,9 +225,23 @@ Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:
    ```
 
    W automatyzacji: `{% from 'mowca.jinja' import mowca %}{% if mowca() == 'anna' %}…`,
-   np. „gdzie jest mój telefon” dzwoni wtedy na telefon mówcy. Nazwa sensora zależy od
-   języka HA; po angielsku to `sensor.assist_speaker_id_last_speaker`. Po utworzeniu pliku
-   uruchom akcję `homeassistant.reload_custom_templates`.
+   np. „gdzie jest mój telefon” dzwoni wtedy na telefon mówcy. Identyfikatory encji są takie
+   same w każdym języku HA: `sensor.speaker_id_last_speaker`, `stt.speaker_id_speech_to_text`,
+   `conversation.speaker_id_agent` (id z wersji 0.1.x, zbudowane z polskiej nazwy, zmieniają się
+   same; sprawdź potoki Assist). Po utworzeniu pliku uruchom akcję
+   `homeassistant.reload_custom_templates`.
+
+### Prawdopodobny mówca
+
+Gdy głos nie osiągnie progu swojej osoby (albo jest za blisko drugiej), wynik to `unknown`,
+ale najbardziej podobna osoba jest podawana jako **prawdopodobna**, jeśli podobieństwo wynosi co
+najmniej **Prawdopodobny mówca od** (opcje → Progi rozpoznawania, domyślnie 0.40): atrybuty
+`probable`, `probable_name`, `probable_person`, `probable_user_id`. Przydaje się tam, gdzie
+zgadywanie jest w porządku i można je powiedzieć na głos - Assist Router odpowiada „Wydaje mi
+się, że pyta Zosia. Dzisiaj masz…”. Prawdopodobny mówca nigdy nie wykonuje poleceń jako
+użytkownik HA tej osoby (`context.user_id` bez zmian) - `Context` w HA nie ma miejsca na
+dodatkowe pola, więc automatyzacje czytają prawdopodobną osobę z sensora:
+`state_attr('sensor.speaker_id_last_speaker', 'probable_person')`.
 
 ## Ogłoszenia (intercom): Twoje nagranie zamiast syntezy
 
@@ -260,10 +278,12 @@ zmian, zamiast czytać tekst głosem Pipera.
 
 | Akcja | Co robi |
 |---|---|
-| `speaker_id.start_enrollment` | `speaker: anna`, `name: Anna`, `count: 10`, opcjonalnie `satellite: assist_satellite.…`: kolejne 10 wypowiedzi z co najmniej 1,5 s mowy to próbki Anny. **Z `satellite` głośnik prowadzi nagrywanie sam**, bez słowa wybudzającego. Prosi o pierwsze zdanie, a po każdym mówi raz „Nagrano 3 z 10. Kolejne zdanie.” i od razu słucha dalej, bez wykonywania polecenia. Prosi o dłuższe, gdy zdanie było za krótkie, i ponawia pytanie po ciszy albo urwanej rozmowie. Kończy po ostatniej próbce („Gotowe…”) albo po 3 próbach bez nowej. Bez `satellite` każde zdanie zaczyna się od słowa wybudzającego. Postęp widać w atrybucie `enrollment` sensora. |
+| `speaker_id.start_enrollment` | `speaker: anna`, `name: Anna`, `count: 10`, opcjonalnie `satellite: assist_satellite.…`: kolejne 10 wypowiedzi z co najmniej 1,5 s mowy to próbki Anny. **Z `satellite` głośnik prowadzi nagrywanie sam**, bez słowa wybudzającego. Prosi o pierwsze zdanie, a po każdym mówi raz „Nagrano 3 z 10. Kolejne zdanie.” i od razu słucha dalej, bez wykonywania polecenia. Prosi o dłuższe, gdy zdanie było za krótkie, i ponawia pytanie po ciszy albo urwanej rozmowie. Kończy po ostatniej próbce („Gotowe…”) albo po 3 próbach bez nowej. Bez `satellite` każde zdanie zaczyna się od słowa wybudzającego. Postęp widać w atrybucie `enrollment` sensora. **Kolejna seria dochodzi do zapisanych próbek** i liczy wszystkie: trzecia seria po 10 mówi „Nagrano 24 z 30”. |
 | `speaker_id.add_last_sample` | ostatnia wypowiedź (najwyżej sprzed 10 min) jako próbka osoby |
 | `speaker_id.calibrate` | dla każdej osoby porównuje jej próbki z próbkami pozostałych i proponuje próg; z `apply: true` zapisuje progi |
-| `speaker_id.set_speaker` / `delete_speaker` / `list_speakers` | nazwa i własny próg / usunięcie wzorca / lista |
+| `speaker_id.reset_speaker` | usuwa wszystkie próbki i nagrania osoby (oraz jej własny próg), osoba zostaje - nagrywanie od nowa |
+| `speaker_id.rebuild_voiceprints` | liczy każdą próbkę od nowa z zapisanego nagrania (np. po zmianie modelu); próbki bez nagrania zostają bez zmian |
+| `speaker_id.set_speaker` / `delete_speaker` / `list_speakers` | nazwa i własny próg / usunięcie wzorca razem z nagraniami / lista (próbki, nagrania) |
 
 **Wskazówki:**
 - Nagrywaj przez te satelity i z tej odległości, z której domownik zwykle mówi. Mikrofon
@@ -272,6 +292,11 @@ zmian, zamiast czytać tekst głosem Pipera.
 - Kalibracja pokaże `separable: false`, gdy próbki dwóch osób się przenikają. To częste
   u rodzeństwa: dograj więcej próbek albo podnieś `margin`.
 - Głosy dzieci zmieniają się z wiekiem, więc co kilka miesięcy dograj nowe próbki.
+- **Dogrywaj próbki seriami** (np. 3 × 10 przez kilka dni, z różnych satelit): wzorzec to
+  średnia wszystkich próbek, więc z każdą serią jest dokładniejszy. Po każdej serii uruchom
+  `calibrate`. Każda próbka zachowuje swoje nagranie w usłudze (`/data/recordings/<osoba>/`,
+  ok. 0,2 MB na próbkę) aż do `reset_speaker` albo `delete_speaker`, więc wzorce można później
+  przeliczyć od nowa (`rebuild_voiceprints`). Próbki sprzed wersji 0.2.0 nie mają nagrań.
 
 API HTTP usługi (port 10351, opis w `speaker_id/wyoming_speaker_id/http_api.py`) obsługuje
 też wgrywanie nagrań WAV (`POST /api/speakers/{id}/samples`) i test (`POST /api/identify`).
@@ -394,11 +419,13 @@ nie stosuj `apply`.
 
 Wzorzec głosu to dane biometryczne (RODO, art. 9):
 - wszystko działa lokalnie;
-- usługa zapisuje tylko wektory (`/data/speakers.json`), bez nagrań;
+- usługa zapisuje wektory (`/data/speakers.json`) i nagrania próbek głosu
+  (`/data/recordings/`), nigdy poza Twoją sieć;
 - ostatnia wypowiedź jest trzymana wyłącznie w pamięci, najwyżej 10 minut (do
   `add_last_sample`);
 - domownicy powinni wiedzieć o rozpoznawaniu i się na nie zgodzić;
-- `delete_speaker` usuwa wzorzec osoby.
+- `delete_speaker` usuwa wzorzec osoby razem z nagraniami, `reset_speaker` tylko próbki i
+  nagrania.
 
 ## Rozwój
 

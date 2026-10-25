@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SpeakerIdConfigEntry, async_handle_result, device_info
 from .client import SpeakerIdError
+from .const import ENTITY_IDS
 from .speaker import CURRENT, SpeakerResult
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class SpeakerIdStt(stt.SpeechToTextEntity):
     def __init__(self, entry: SpeakerIdConfigEntry) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}-stt"
+        self.entity_id = ENTITY_IDS["stt"]  # the same in every HA language
         self._attr_device_info = device_info(entry)
         self._attr_extra_state_attributes = {"asr": entry.runtime_data.asr_name}
 

@@ -3,7 +3,7 @@
 Pipelines use "Assist Speaker ID" as their conversation agent; it adds a line like "The
 person speaking is Anna." to the extra system prompt (LLM agents read it), optionally
 runs the request as that person's Home Assistant user, and passes everything on to
-the configured agent.
+the configured agent. A probable speaker (not certain) only gets a "probably Anna" line.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SpeakerIdConfigEntry, device_info
 from .api import enrollment_reply
-from .const import CONF_AGENT, CONF_PROMPT, CONF_SET_USER, prompt_for
+from .const import CONF_AGENT, CONF_PROMPT, CONF_SET_USER, ENTITY_IDS, probable_prompt, prompt_for
 from .speaker import CURRENT
 
 
@@ -37,6 +37,7 @@ class SpeakerIdAgent(conversation.ConversationEntity):
     def __init__(self, entry: SpeakerIdConfigEntry) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}-conversation"
+        self.entity_id = ENTITY_IDS["conversation"]  # the same in every HA language
         self._attr_device_info = device_info(entry)
 
     @property
@@ -68,6 +69,12 @@ class SpeakerIdAgent(conversation.ConversationEntity):
             prompt = f"{prompt}\n{line}" if prompt else line
             if options.get(CONF_SET_USER) and speaker.user_id and not context.user_id:
                 context = Context(user_id=speaker.user_id, parent_id=context.id)
+        elif speaker is not None and speaker.probable:
+            # not certain - the agent is told so, and nothing runs as that person's user
+            line = probable_prompt(self.hass.config.language).format(
+                name=speaker.probable_name or speaker.probable
+            )
+            prompt = f"{prompt}\n{line}" if prompt else line
         return await conversation.async_converse(
             self.hass,
             user_input.text,

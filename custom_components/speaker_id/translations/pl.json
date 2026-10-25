@@ -60,16 +60,18 @@
       },
       "thresholds": {
         "title": "Progi rozpoznawania",
-        "description": "Wynik rozpoznania to **podobieństwo** wypowiedzi do wzorca głosu danej osoby (0-1, „Kto to mówi?” podaje je w procentach). Osoba jest rozpoznana, gdy podobieństwo jest **nie mniejsze niż jej próg** i wyprzedza drugą osobę o **margines**. Wyższy próg = ostrzej: mniej pomyłek, częściej „nieznany”. Opis i kalibracja: README.\n\nOsoby (próbki · własny próg, — = wspólny):\n{speakers}\n\nPuste pole osoby = próg wspólny. Kalibracja z „apply” nadpisuje progi osób.",
+        "description": "Wynik rozpoznania to **podobieństwo** wypowiedzi do wzorca głosu danej osoby (0-1, „Kto to mówi?” podaje je w procentach). Osoba jest rozpoznana, gdy podobieństwo jest **nie mniejsze niż jej próg** i wyprzedza drugą osobę o **margines**. Wyższy próg = ostrzej: mniej pomyłek, częściej „nieznany”. Opis i kalibracja: README.\n\nOsoby (próbki (nagrania) · własny próg, — = wspólny):\n{speakers}\n\nPuste pole osoby = próg wspólny. Kalibracja z „apply” nadpisuje progi osób.",
         "data": {
           "threshold": "Próg wspólny",
           "margin": "Margines nad drugą osobą",
-          "min_speech": "Minimum mowy"
+          "min_speech": "Minimum mowy",
+          "probable_threshold": "Prawdopodobny mówca od"
         },
         "data_description": {
           "threshold": "Dla osób bez własnego progu. Typowo 0,5-0,7.",
           "margin": "O ile najlepsza osoba musi wyprzedzać drugą (0,05 = 5 punktów procentowych). Większy przy podobnych głosach, np. rodzeństwa.",
-          "min_speech": "Krótsza wypowiedź to zawsze „nieznany”: za mało mowy, żeby rozpoznać głos."
+          "min_speech": "Krótsza wypowiedź to zawsze „nieznany”: za mało mowy, żeby rozpoznać głos.",
+          "probable_threshold": "Nierozpoznany głos o co najmniej takim podobieństwie jest podawany jako „prawdopodobnie <osoba>” (atrybuty czujnika probable_person i probable_user_id, Assist Router odpowiada „Wydaje mi się, że pyta Anna”). Nigdy nie działa jako użytkownik tej osoby."
         }
       }
     },
@@ -137,7 +139,7 @@
     },
     "delete_speaker": {
       "name": "Usuń mówcę",
-      "description": "Zapomina osobę i usuwa wzorzec jej głosu.",
+      "description": "Zapomina osobę i usuwa wzorzec jej głosu oraz nagrania.",
       "fields": {
         "speaker": {
           "name": "Mówca",
@@ -206,6 +208,20 @@
           "description": "Starsza ostatnia wypowiedź nie jest ogłaszana."
         }
       }
+    },
+    "reset_speaker": {
+      "name": "Wyzeruj mówcę",
+      "description": "Usuwa wszystkie próbki głosu tej osoby i ich nagrania (oraz jej własny próg), osoba zostaje - nagrywanie zaczyna się od nowa.",
+      "fields": {
+        "speaker": {
+          "name": "Mówca",
+          "description": "Identyfikator mówcy"
+        }
+      }
+    },
+    "rebuild_voiceprints": {
+      "name": "Przelicz wzorce",
+      "description": "Liczy każdą próbkę od nowa z jej zapisanego nagrania (np. po zmianie modelu). Próbki bez nagrania zostają bez zmian."
     }
   }
 }

@@ -24,9 +24,11 @@ and thresholds".
 i.e. the speaker's recording unchanged, on the other speakers. Details: README, section
 "Announcements".
 
-**Privacy:** a voiceprint is biometric data. The add-on stores only vectors (no
-recordings) in `/data/speakers.json` and sends nothing outside your network.
-`speaker_id.delete_speaker` deletes a person's voiceprint.
+**Privacy:** a voiceprint is biometric data. The add-on stores the vectors in
+`/data/speakers.json` and the recording of every voice sample in `/data/recordings/<person>/`
+(about 0.2 MB per sample, needed to rebuild voiceprints with `speaker_id.rebuild_voiceprints`),
+and sends nothing outside your network. `speaker_id.reset_speaker` deletes a person's samples and
+recordings, `speaker_id.delete_speaker` the whole person.
 
 Full documentation: [English](https://witold-gren.github.io/home-assistant-assist-speaker-id/en/).
 Dokumentacja po polsku (Polish documentation): [witold-gren.github.io/home-assistant-assist-speaker-id/pl/](https://witold-gren.github.io/home-assistant-assist-speaker-id/pl/).

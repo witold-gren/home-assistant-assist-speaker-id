@@ -9,7 +9,7 @@ from homeassistant.components import conversation, stt
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import intent
+from homeassistant.helpers import entity_registry as er, intent
 from homeassistant.setup import async_setup_component
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -20,6 +20,7 @@ from custom_components.speaker_id.const import (
     CONF_API_PORT,
     CONF_API_TOKEN,
     CONF_PEOPLE,
+    CONF_PROBABLE_THRESHOLD,
     CONF_PROMPT,
     CONF_SET_USER,
     DOMAIN,
@@ -29,9 +30,9 @@ from custom_components.speaker_id.speaker import CURRENT
 
 from .conftest import Stack, pcm, voice
 
-STT = "stt.assist_speaker_id_speech_to_text_with_speaker"
-AGENT = "conversation.assist_speaker_id_agent_with_speaker"
-SENSOR = "sensor.assist_speaker_id_last_speaker"
+STT = "stt.speaker_id_speech_to_text"
+AGENT = "conversation.speaker_id_agent"
+SENSOR = "sensor.speaker_id_last_speaker"
 METADATA = stt.SpeechMetadata(
     language="pl",
     format=stt.AudioFormats.WAV,
@@ -159,11 +160,73 @@ async def test_unknown_speaker(hass: HomeAssistant, stack: Stack, entry: MockCon
     stack.enroll("kasia", "Kasia", 300)
     await _setup(hass, entry)
 
-    result = await _transcribe(hass, pcm(voice(900)))
+    result = await _transcribe(hass, pcm(voice(380)))  # similarity ~0.16
 
     assert result.text == "jakie mam dzisiaj zajęcia"
     assert get_speaker(hass).speaker is None
+    assert get_speaker(hass).probable is None  # too far from anybody
     assert hass.states.get(SENSOR).state == "unknown"
+
+
+async def test_probable_speaker(hass: HomeAssistant, stack: Stack, entry: MockConfigEntry) -> None:
+    """Below the threshold (0.8) but above probable_threshold (0.4): "probably Kasia"."""
+    stack.enroll("kasia", "Kasia", 300)
+    hass.states.async_set(
+        "person.kasia", "home", {"user_id": "user-kasia", "friendly_name": "Kasia"}
+    )
+    await _setup(hass, entry, **{CONF_PEOPLE: {"kasia": "person.kasia"}})
+    events = []
+    hass.bus.async_listen(EVENT_IDENTIFIED, events.append)
+
+    await _transcribe(hass, pcm(voice(340, seed=5)))  # similarity ~0.73
+    await hass.async_block_till_done()
+
+    speaker = get_speaker(hass)
+    assert (speaker.speaker, speaker.user_id) == (None, None)  # not recognized
+    assert (speaker.probable, speaker.probable_name) == ("kasia", "Kasia")
+    assert (speaker.probable_person, speaker.probable_user_id) == ("person.kasia", "user-kasia")
+    state = hass.states.get(SENSOR)
+    assert state.state == "unknown"
+    assert state.attributes["probable_person"] == "person.kasia"
+    assert state.attributes["probable_user_id"] == "user-kasia"
+    assert events[0].data["probable"] == "kasia"
+
+
+async def test_probable_threshold_option(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    stack.enroll("kasia", "Kasia", 300)
+    await _setup(hass, entry, **{CONF_PROBABLE_THRESHOLD: 0.75})
+
+    await _transcribe(hass, pcm(voice(340, seed=5)))  # ~0.73 < 0.75
+
+    assert get_speaker(hass).probable is None
+
+
+@pytest.mark.parametrize(
+    ("speaker", "reason", "enrollment", "expected"),
+    [
+        (None, "kasia too close to tosia", None, "kasia"),
+        (None, "kasia below threshold 0.80", None, "kasia"),
+        (None, "too short (0.4 s of speech)", None, None),
+        (None, "kasia below threshold 0.80", {"speaker": "kasia"}, None),
+        ("kasia", "match", None, None),  # recognized - nothing probable
+    ],
+)
+def test_probable_speaker_rules(speaker, reason, enrollment, expected) -> None:
+    from custom_components.speaker_id import _probable_speaker
+    from custom_components.speaker_id.speaker import SpeakerResult
+
+    result = SpeakerResult(
+        speaker=speaker,
+        name=None,
+        score=0.7,
+        scores={"kasia": 0.7, "tosia": 0.68},
+        reason=reason,
+        enrollment=enrollment,
+    )
+    entry = MockConfigEntry(domain=DOMAIN)
+    assert _probable_speaker(entry, result) == expected
 
 
 async def test_speaker_does_not_leak_to_other_tasks(
@@ -256,6 +319,29 @@ async def test_agent_keeps_user_unless_enabled(
     assert got.context.user_id is None
 
 
+async def test_agent_tells_probable_speaker_without_user(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    stack.enroll("jan", "Jan", 300)
+    hass.states.async_set("person.jan", "home", {"user_id": "user-jan", "friendly_name": "Jan"})
+    agent_id, target = _target(hass)
+    await _setup(
+        hass,
+        entry,
+        **{CONF_AGENT: agent_id, CONF_SET_USER: True, CONF_PEOPLE: {"jan": "person.jan"}},
+    )
+    hass.config.language = "pl"
+
+    await _transcribe(hass, pcm(voice(340, seed=5)))
+    await conversation.async_converse(
+        hass, "co mam dzisiaj", None, Context(), language="pl", agent_id=AGENT
+    )
+
+    got = target.inputs[-1]
+    assert got.extra_system_prompt.startswith("Prawdopodobnie pyta: Jan")
+    assert got.context.user_id is None  # never runs as the probable person
+
+
 async def test_agent_without_speaker_changes_nothing(
     hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
 ) -> None:
@@ -288,8 +374,8 @@ async def test_enrollment_by_voice(
     await _transcribe(hass, pcm(voice(330, seed=2)))
     await _transcribe(hass, pcm(voice(330, seed=3)))
 
-    assert started == {"speaker": "tosia", "count": 2, "done": 0}
-    assert progress == {"speaker": "tosia", "count": 2, "done": 1}
+    assert started == {"speaker": "tosia", "count": 2, "done": 0, "total": 0, "target": 2}
+    assert progress == {"speaker": "tosia", "count": 2, "done": 1, "total": 1, "target": 2}
     assert hass.states.get(SENSOR).state == "Tosia"
     listed = await hass.services.async_call(
         DOMAIN, "list_speakers", {}, blocking=True, return_response=True
@@ -361,7 +447,7 @@ async def test_pipeline_passes_speaker_from_stt_to_agent(
     assert got.extra_system_prompt == "Pytanie zadaje: Kasia."
 
 
-# --- nagrywanie wzorca z przewodnikiem (satelita prosi o zdania sam) ---
+# --- guided enrollment (the satellite asks for each sentence itself) ---
 
 SATELLITE = "assist_satellite.pokoj_jana"
 
@@ -416,9 +502,70 @@ async def test_guided_enrollment_asks_for_each_sample(
     assert asks[-1].data["start_message"].startswith("Za krótko.")
     await _turn(hass, pcm(voice(180, seed=2)))
 
-    assert says[-1].data["message"] == "Gotowe, nagrano 2 próbek głosu: Jan."
+    assert says[-1].data["message"] == "Gotowe. Wzorzec głosu: Jan, liczba próbek: 2."
     assert len(stack.service.store.speakers["jan"].samples) == 2
     assert entry.runtime_data.guide is not None and not entry.runtime_data.guide.active
+
+
+async def test_guided_second_series_counts_all_samples(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    """A second series adds to the saved samples: „Nagrano 4 z 5”, recordings kept."""
+    stack.enroll("jan", "Jan", 180)  # 3 samples already
+    asks, says = await _guided(hass, stack, entry, count=2)
+    assert (
+        asks[0]
+        .data["start_message"]
+        .startswith("Dogrywam próbki głosu: Jan, zapisane są 3, nagrywam do 5.")
+    )
+
+    await _turn(hass, pcm(voice(180, seed=11)))
+    assert asks[-1].data["start_message"] == "Nagrano 4 z 5. Kolejne zdanie."
+    await _turn(hass, pcm(voice(180, seed=12)))
+
+    assert says[-1].data["message"] == "Gotowe. Wzorzec głosu: Jan, liczba próbek: 5."
+    speaker = stack.service.store.speakers["jan"]
+    assert speaker.summary()["recordings"] == 2  # the new samples keep their recordings
+
+
+async def test_reset_speaker_and_rebuild(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    stack.enroll("jan", "Jan", 180)
+    stack.service.store.upsert("jan", None, 0.7)
+    await _setup(hass, entry)
+    await _transcribe(hass, pcm(voice(180, seed=3)))
+    await hass.services.async_call(DOMAIN, "add_last_sample", {"speaker": "jan"}, blocking=True)
+
+    report = await hass.services.async_call(
+        DOMAIN, "rebuild_voiceprints", {}, blocking=True, return_response=True
+    )
+    assert report["speakers"]["jan"] == {"rebuilt": 1, "without_recording": 3, "kept": 0}
+
+    reset = await hass.services.async_call(
+        DOMAIN, "reset_speaker", {"speaker": "jan"}, blocking=True, return_response=True
+    )
+    assert (reset["samples"], reset["recordings"], reset["threshold"]) == (0, 0, None)
+    assert "jan" in stack.service.store.speakers
+
+
+def test_enrollment_reply_without_totals_from_an_older_service(hass: HomeAssistant) -> None:
+    from custom_components.speaker_id.api import enrollment_reply
+    from custom_components.speaker_id.speaker import SpeakerResult
+
+    hass.config.language = "pl"
+    result = SpeakerResult(
+        speaker=None,
+        name=None,
+        score=0.0,
+        enrollment={"speaker": "jan", "count": 10, "done": 3},
+        sample_added=True,
+    )
+    token = CURRENT.set(result)
+    try:
+        assert enrollment_reply(hass) == ("Nagrano 3 z 10. Kolejne zdanie.", True)
+    finally:
+        CURRENT.reset(token)
 
 
 async def test_guided_enrollment_stops_after_silence(
@@ -431,7 +578,7 @@ async def test_guided_enrollment_stops_after_silence(
     await _turn(hass, None)
     await _turn(hass, None)
 
-    assert says[-1].data["message"] == "Kończę nagrywanie wzorca. Zapisałem 0 z 5."
+    assert says[-1].data["message"] == "Kończę nagrywanie wzorca. Zapisano 0 z 5."
     asked = len(asks)
     await _turn(hass, None)  # after finishing - no more questions
     assert len(asks) == asked
@@ -476,7 +623,9 @@ async def test_enrollment_reply_skips_the_agent(
     assert first.continue_conversation
     assert short.response.speech["plain"]["speech"].startswith("Za krótko.")
     assert short.continue_conversation
-    assert last.response.speech["plain"]["speech"] == "Gotowe, nagrano 2 próbek głosu: Jan."
+    assert (
+        last.response.speech["plain"]["speech"] == "Gotowe. Wzorzec głosu: Jan, liczba próbek: 2."
+    )
     assert not last.continue_conversation
     assert target.inputs == []  # not a single command reached the target agent
     assert says == []  # the guide does not repeat „Gotowe”
@@ -545,19 +694,49 @@ async def test_thresholds_options_saved_in_service(
 
     form = await _options(hass, entry, "thresholds")
     assert form["step_id"] == "thresholds"
-    assert "- Tata: 3 · 0.70" in form["description_placeholders"]["speakers"]
-    assert "- Kasia: 3 · —" in form["description_placeholders"]["speakers"]
+    assert "- Tata: 3 (0) · 0.70" in form["description_placeholders"]["speakers"]
+    assert "- Kasia: 3 (0) · —" in form["description_placeholders"]["speakers"]
 
     result = await hass.config_entries.options.async_configure(
         form["flow_id"],
-        {"threshold": 0.6, "margin": 0.08, "min_speech": 1.2, "Kasia (kasia)": 0.72},
+        {
+            "threshold": 0.6,
+            "margin": 0.08,
+            "min_speech": 1.2,
+            CONF_PROBABLE_THRESHOLD: 0.4,
+            "Kasia (kasia)": 0.72,
+        },
     )
 
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "thresholds_saved"
+    await hass.async_block_till_done()
+    assert CONF_PROBABLE_THRESHOLD not in entry.options  # unchanged default - not saved
     store = stack.service.store
     assert store.settings() == {"threshold": 0.6, "margin": 0.08, "min_speech": 1.2}
     assert store.speakers["kasia"].threshold == 0.72
     assert store.speakers["tata"].threshold is None  # empty field = shared threshold
+
+
+async def test_probable_threshold_saved_and_kept_by_people_step(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    stack.enroll("kasia", "Kasia", 300)
+    await _setup(hass, entry)
+    form = await _options(hass, entry, "thresholds")
+    await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        {"threshold": 0.8, "margin": 0.05, "min_speech": 1.0, CONF_PROBABLE_THRESHOLD: 0.55},
+    )
+    await hass.async_block_till_done()
+    assert entry.options[CONF_PROBABLE_THRESHOLD] == 0.55
+
+    form = await _options(hass, entry, "people")
+    await hass.config_entries.options.async_configure(
+        form["flow_id"], {"Kasia (kasia)": "person.kasia"}
+    )
+    await hass.async_block_till_done()
+    assert entry.options[CONF_PROBABLE_THRESHOLD] == 0.55
+    assert entry.options[CONF_PEOPLE] == {"kasia": "person.kasia"}
 
 
 async def test_people_options_still_work(
@@ -683,3 +862,40 @@ async def test_unknown_announcement_token(
     await _setup(hass, entry)
     client = await hass_client()
     assert (await client.get("/api/speaker_id/announcement/nie-ma")).status == 404
+
+
+# --- entity ids independent of the HA language ---
+
+
+async def test_entity_ids_are_english(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    hass.config.language = "pl"
+    await _setup(hass, entry)
+    for entity_id in (STT, AGENT, SENSOR):
+        assert hass.states.get(entity_id) is not None
+
+
+async def test_legacy_entity_ids_are_migrated(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    """Polish default ids of earlier versions get the new ones; ids changed by hand stay."""
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    for domain, key, object_id in (
+        ("sensor", "last_speaker", "speaker_id_ostatni_mowca"),
+        ("stt", "stt", "speaker_id_mowa_na_tekst_z_mowca"),
+        ("conversation", "conversation", "my_agent"),  # changed by the user
+    ):
+        registry.async_get_or_create(
+            domain, DOMAIN, f"{entry.entry_id}-{key}",
+            config_entry=entry, suggested_object_id=object_id,
+        )  # fmt: skip
+    await _setup(hass, entry)
+
+    assert (
+        registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}-last_speaker") == SENSOR
+    )
+    assert registry.async_get_entity_id("stt", DOMAIN, f"{entry.entry_id}-stt") == STT
+    assert hass.states.get("conversation.my_agent") is not None
+    assert hass.states.get("sensor.speaker_id_ostatni_mowca") is None

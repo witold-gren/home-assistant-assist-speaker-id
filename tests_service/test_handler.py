@@ -153,11 +153,31 @@ async def test_enrollment_takes_next_utterances(proxy: int, service: SpeakerServ
     short = (await transcribe(proxy, pcm(voice(180, seconds=0.8))))[-1]  # too short
     second = (await transcribe(proxy, pcm(voice(180, seed=2))))[-1]
 
-    assert first.data["enrollment"] == {"speaker": "jan", "count": 2, "done": 1}
+    assert first.data["enrollment"] == {
+        "speaker": "jan", "count": 2, "done": 1, "total": 1, "target": 2
+    }  # fmt: skip
     assert short.data["enrollment"]["done"] == 1
     assert second.data["enrollment"]["done"] == 2
     assert service.enrollment is None
-    assert len(service.store.speakers["jan"].samples) == 2
+    samples = service.store.speakers["jan"].samples
+    assert len(samples) == 2
+    # every sample keeps its recording until reset
+    assert all((service.store.recordings / "jan" / x.recording).is_file() for x in samples)
     after = (await transcribe(proxy, pcm(voice(180, seed=4))))[-1]
     assert after.data["speaker"] == "jan"
     assert "enrollment" not in after.data
+
+
+async def test_second_series_counts_all_samples(proxy: int, service: SpeakerService) -> None:
+    """3 series of 10 = 30 samples: the next series reports the total („11 of 20”)."""
+    from wyoming_speaker_id.service import Enrollment
+
+    service.store.upsert("jan", "Jan", None)
+    for seed in range(3):
+        service.store.add_sample("jan", service.embedder.embed(voice(180, seed=seed)), 2.0)
+    service.enrollment = Enrollment("jan", 2, start=3)
+
+    first = (await transcribe(proxy, pcm(voice(180, seed=7))))[-1]
+
+    assert first.data["enrollment"]["total"] == 4
+    assert first.data["enrollment"]["target"] == 5

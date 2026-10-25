@@ -3,6 +3,29 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 Add-on (service) changes: [speaker_id/CHANGELOG.md](speaker_id/CHANGELOG.md).
 
+## [0.2.0] - 2026-10-25
+
+### Added
+- Probable speaker: an unrecognized voice (below its person's threshold or too close to the
+  runner-up) whose best similarity reaches the new option **Probable speaker from** (default
+  0.40) is reported as `probable`, `probable_name`, `probable_person`, `probable_user_id` -
+  sensor attributes, the `speaker_id_identified` event and `get_speaker()`. "Agent with
+  speaker" adds a "probably {name}" prompt line; nothing runs as that person's user.
+- Sensor attribute `user_id` (the recognized person's HA user).
+- Adding samples in series: another enrollment adds to the saved samples and the satellite counts
+  all of them („Dogrywam próbki głosu: Anna, zapisane są 20, nagrywam do 30”, „Nagrano 24 z 30”,
+  „Gotowe. Wzorzec głosu: Anna, liczba próbek: 30.”). Needs the service 0.2.0, which keeps the
+  recording of every sample; an older service counts the series only.
+- Actions `speaker_id.reset_speaker` (delete the samples and recordings, keep the person) and
+  `speaker_id.rebuild_voiceprints` (embed all samples again from their recordings). The thresholds
+  options show samples and recordings per person; `delete_speaker` deletes the recordings too.
+
+### Changed
+- Entity ids no longer depend on the HA language: `sensor.speaker_id_last_speaker`,
+  `stt.speaker_id_speech_to_text`, `conversation.speaker_id_agent`. Default ids of 0.1.x
+  (e.g. `sensor.speaker_id_ostatni_mowca`) are renamed on setup; ids changed by hand stay.
+  Pipelines that use the old speech-to-text id must be switched to the new one.
+
 ## [0.1.1] - 2026-10-25
 
 ### Added

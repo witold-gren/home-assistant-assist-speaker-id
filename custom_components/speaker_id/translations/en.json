@@ -60,16 +60,18 @@
       },
       "thresholds": {
         "title": "Recognition thresholds",
-        "description": "The result is the **similarity** of an utterance to a person's voiceprint (0-1; \"who is speaking?\" says it in percent). A person is recognised when the similarity reaches **their threshold** and beats the runner-up by the **margin**. A higher threshold is stricter: fewer mistakes, more \"unknown\". Details and calibration: README.\n\nPeople (samples · own threshold, — = shared):\n{speakers}\n\nAn empty person field = the shared threshold. Calibration with \"apply\" overwrites the per-person thresholds.",
+        "description": "The result is the **similarity** of an utterance to a person's voiceprint (0-1; \"who is speaking?\" says it in percent). A person is recognised when the similarity reaches **their threshold** and beats the runner-up by the **margin**. A higher threshold is stricter: fewer mistakes, more \"unknown\". Details and calibration: README.\n\nPeople (samples (recordings) · own threshold, — = shared):\n{speakers}\n\nAn empty person field = the shared threshold. Calibration with \"apply\" overwrites the per-person thresholds.",
         "data": {
           "threshold": "Shared threshold",
           "margin": "Margin over the runner-up",
-          "min_speech": "Minimum speech"
+          "min_speech": "Minimum speech",
+          "probable_threshold": "Probable speaker from"
         },
         "data_description": {
           "threshold": "For people without an own threshold. Typically 0.5-0.7.",
           "margin": "How much the best person must beat the second one (0.05 = 5 points). Larger for similar voices, e.g. siblings.",
-          "min_speech": "Shorter utterances are always \"unknown\": too little speech to recognise a voice."
+          "min_speech": "Shorter utterances are always \"unknown\": too little speech to recognise a voice.",
+          "probable_threshold": "An unrecognized voice with at least this similarity is reported as \"probably <person>\" (sensor attributes probable_person and probable_user_id, Assist Router answers \"I think it is Anna\"). Never runs as that person's user."
         }
       }
     },
@@ -137,7 +139,7 @@
     },
     "delete_speaker": {
       "name": "Delete speaker",
-      "description": "Forget the speaker and delete the voiceprint.",
+      "description": "Forgets the person and deletes their voiceprint and recordings.",
       "fields": {
         "speaker": {
           "name": "Speaker",
@@ -206,6 +208,20 @@
           "description": "An older last utterance is not announced."
         }
       }
+    },
+    "reset_speaker": {
+      "name": "Reset speaker",
+      "description": "Deletes all voice samples and their recordings of this person (and their own threshold), keeps the person - enrollment starts over.",
+      "fields": {
+        "speaker": {
+          "name": "Speaker",
+          "description": "Speaker id"
+        }
+      }
+    },
+    "rebuild_voiceprints": {
+      "name": "Rebuild voiceprints",
+      "description": "Computes every sample again from its saved recording (e.g. after changing the model). Samples without a recording keep their voiceprint."
     }
   }
 }

@@ -23,6 +23,11 @@ class SpeakerResult:
     reason: str = ""
     person: str | None = None  # person entity id mapped in the options
     user_id: str | None = None  # that person's Home Assistant user
+    # unrecognized voice: the most similar speaker when close enough (probable_threshold)
+    probable: str | None = None
+    probable_name: str | None = None
+    probable_person: str | None = None
+    probable_user_id: str | None = None
     enrollment: dict[str, Any] | None = None
     # utterance during enrollment: True = saved as a sample, False = too short;
     # None = a normal utterance
@@ -53,6 +58,11 @@ class SpeakerResult:
             "scores": self.scores,
             "speech_seconds": self.speech_seconds,
             "reason": self.reason,
+            "probable": self.probable,
+            "probable_name": self.probable_name,
+            "probable_person": self.probable_person,
+            "probable_user_id": self.probable_user_id,
+            "user_id": self.user_id,
             "enrollment": self.enrollment,
         }
 

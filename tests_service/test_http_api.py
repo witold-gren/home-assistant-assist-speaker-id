@@ -72,7 +72,7 @@ async def test_enrollment_start_stop(api: TestClient, service: SpeakerService) -
     started = await (
         await api.post("/api/enrollment", json={"speaker": "tosia", "count": 5})
     ).json()
-    assert started == {"speaker": "tosia", "count": 5, "done": 0}
+    assert started == {"speaker": "tosia", "count": 5, "done": 0, "total": 0, "target": 5}
     assert "tosia" in service.store.speakers  # created when the enrollment starts
     info = await (await api.get("/api/info")).json()
     assert info["enrollment"]["speaker"] == "tosia"
@@ -117,3 +117,45 @@ async def test_settings_api(api: TestClient, service: SpeakerService) -> None:
     assert changed == {"threshold": 0.6, "margin": 0.05, "min_speech": 1.0, "from": "file"}
     assert service.store.threshold == 0.6
     assert bad.status == 400
+
+
+async def test_series_continues_from_existing_samples(
+    api: TestClient, service: SpeakerService
+) -> None:
+    await api.put("/api/speakers/tosia", json={})
+    for seed in range(3):
+        await api.post("/api/speakers/tosia/samples", data=to_wav(voice(300, seed=seed)))
+
+    started = await (
+        await api.post("/api/enrollment", json={"speaker": "tosia", "count": 10})
+    ).json()
+
+    assert (started["total"], started["target"]) == (3, 13)
+
+
+async def test_uploaded_sample_keeps_recording_and_reset_removes_it(
+    api: TestClient, service: SpeakerService
+) -> None:
+    await api.put("/api/speakers/tosia", json={"threshold": 0.7})
+    summary = await (
+        await api.post("/api/speakers/tosia/samples", data=to_wav(voice(300, seed=1)))
+    ).json()
+    assert summary["recordings"] == 1
+    folder = service.store.recordings / "tosia"
+    assert len(list(folder.glob("*.wav"))) == 1
+
+    reset = await (await api.post("/api/speakers/tosia/reset")).json()
+
+    assert (reset["samples"], reset["recordings"], reset["threshold"]) == (0, 0, None)
+    assert reset["name"] == "tosia"  # the speaker stays
+    assert not folder.exists()
+    assert (await api.post("/api/speakers/nobody/reset")).status == 404
+
+
+async def test_rebuild_api(api: TestClient, service: SpeakerService) -> None:
+    await api.put("/api/speakers/tosia", json={})
+    await api.post("/api/speakers/tosia/samples", data=to_wav(voice(300, seed=1)))
+
+    report = await (await api.post("/api/rebuild")).json()
+
+    assert report["speakers"]["tosia"] == {"rebuilt": 1, "without_recording": 0, "kept": 0}

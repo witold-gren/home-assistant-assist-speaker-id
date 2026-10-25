@@ -36,24 +36,28 @@ MESSAGES = {
     "pl": {
         "start": "Nagrywam wzorzec głosu: {name}. Powiedz zwykłe polecenie, na przykład: "
         "jaka będzie jutro pogoda.",
-        "next": "Nagrano {done} z {count}. Kolejne zdanie.",
-        "sample": "Nagrano {done} z {count}. Kolejne zdanie.",
+        "start_more": "Dogrywam próbki głosu: {name}, zapisane są {total}, nagrywam do {target}. "
+        "Powiedz zwykłe polecenie.",
+        "next": "Nagrano {total} z {target}. Kolejne zdanie.",
+        "sample": "Nagrano {total} z {target}. Kolejne zdanie.",
         "short": "Za krótko. Powiedz dłuższe zdanie, kilka słów.",
         "silence": "Nic nie usłyszałem. Powiedz zdanie, kilka słów.",
         "continue": "Kolejne zdanie.",
-        "done": "Gotowe, nagrano {count} próbek głosu: {name}.",
-        "stopped": "Kończę nagrywanie wzorca. Zapisałem {done} z {count}.",
+        "done": "Gotowe. Wzorzec głosu: {name}, liczba próbek: {total}.",
+        "stopped": "Kończę nagrywanie wzorca. Zapisano {total} z {target}.",
     },
     "en": {
         "start": "Recording a voiceprint for {name}. Say a normal command, for example: "
         "what is the weather tomorrow.",
-        "next": "Recorded {done} of {count}. Next sentence.",
-        "sample": "Recorded {done} of {count}. Next sentence.",
+        "start_more": "Adding voice samples for {name}: {total} saved, recording up to {target}. "
+        "Say a normal command.",
+        "next": "Recorded {total} of {target}. Next sentence.",
+        "sample": "Recorded {total} of {target}. Next sentence.",
         "short": "Too short. Please say a longer sentence.",
         "silence": "I did not hear anything. Please say a sentence.",
         "continue": "Next sentence.",
-        "done": "Done, recorded {count} voice samples for {name}.",
-        "stopped": "Stopping the enrollment. Saved {done} of {count}.",
+        "done": "Done. Voiceprint of {name}: {total} samples.",
+        "stopped": "Stopping the enrollment. Saved {total} of {target}.",
     },
 }
 
@@ -66,6 +70,8 @@ class Guide:
     name: str
     count: int
     done: int = 0
+    # samples the speaker had before this series (another series adds to them)
+    start: int = 0
     misses: int = 0
     answered: bool = False  # a transcript arrived in the current listening turn
     listened: bool = False  # the satellite listened since the last prompt
@@ -82,10 +88,16 @@ class Guide:
         self._resume: CALLBACK_TYPE | None = None
 
     def message(self, key: str) -> str:
-        return self._text[key].format(name=self.name, done=self.done, count=self.count)
+        return self._text[key].format(
+            name=self.name,
+            done=self.done,
+            count=self.count,
+            total=self.start + self.done,
+            target=self.start + self.count,
+        )
 
     async def async_start(self) -> None:
-        await self._ask(self.message("start"))
+        await self._ask(self.message("start_more" if self.start else "start"))
 
     async def _ask(self, text: str) -> None:
         self.answered = False

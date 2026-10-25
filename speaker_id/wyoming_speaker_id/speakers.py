@@ -5,11 +5,15 @@ normalised again. Identification is open-set: the best speaker wins only when
 its cosine score reaches the threshold AND beats the runner-up by a margin;
 otherwise the answer is "unknown" (None).
 
-Only embeddings are stored (no audio) - a voiceprint is biometric data.
+Each sample keeps its recording (WAV next to speakers.json, ``recordings/<id>/``) until the
+sample, the speaker or all their samples (reset) are deleted - voiceprints can then be built
+again from the recordings (another model, other settings). Voice recordings and voiceprints
+are biometric data: they never leave the service.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
@@ -17,11 +21,15 @@ import logging
 import os
 from pathlib import Path
 import re
+import shutil
 import tempfile
 import threading
 from typing import Any
+import uuid
 
 import numpy as np
+
+from .audio import RATE, from_wav, speech_only, to_wav
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +50,7 @@ class Sample:
     added: str
     seconds: float = 0.0
     text: str = ""
+    recording: str = ""  # WAV file name in recordings/<speaker>/, "" = no recording
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +58,7 @@ class Sample:
             "added": self.added,
             "seconds": round(self.seconds, 2),
             "text": self.text,
+            "recording": self.recording,
         }
 
     @staticmethod
@@ -58,6 +68,7 @@ class Sample:
             added=data.get("added", ""),
             seconds=float(data.get("seconds", 0.0)),
             text=data.get("text", ""),
+            recording=data.get("recording", ""),
         )
 
 
@@ -80,6 +91,7 @@ class Speaker:
             "name": self.name,
             "threshold": self.threshold,
             "samples": len(self.samples),
+            "recordings": sum(1 for s in self.samples if s.recording),
             "seconds": round(sum(s.seconds for s in self.samples), 1),
         }
 
@@ -106,9 +118,15 @@ class SpeakerStore:
     """Enrolled speakers persisted in a JSON file (atomic writes, thread-safe)."""
 
     def __init__(
-        self, path: Path, threshold: float, margin: float, min_speech: float = 1.0
+        self,
+        path: Path,
+        threshold: float,
+        margin: float,
+        min_speech: float = 1.0,
+        recordings: Path | None = None,
     ) -> None:
         self.path = path
+        self.recordings = recordings or path.parent / "recordings"
         # start values (add-on options / environment variables); values set later through
         # the API (integration options in HA) are saved in the file and take precedence
         self.threshold = threshold
@@ -218,23 +236,44 @@ class SpeakerStore:
             return speaker
 
     def delete(self, speaker_id: str) -> bool:
+        """Forget a speaker: voiceprint, samples and recordings."""
         with self._lock:
             if self.speakers.pop(speaker_id, None) is None:
                 return False
             self.save()
+            shutil.rmtree(self.recordings / speaker_id, ignore_errors=True)
             return True
 
+    def reset(self, speaker_id: str) -> Speaker:
+        """Delete all samples and recordings of a speaker, keep the speaker (name). Their own
+        threshold goes too - it was calibrated for the old samples."""
+        with self._lock:
+            speaker = self.speakers[speaker_id]
+            speaker.samples = []
+            speaker.threshold = None
+            self.save()
+            shutil.rmtree(self.recordings / speaker_id, ignore_errors=True)
+            return speaker
+
     def add_sample(
-        self, speaker_id: str, embedding: np.ndarray, seconds: float, text: str = ""
+        self,
+        speaker_id: str,
+        embedding: np.ndarray,
+        seconds: float,
+        text: str = "",
+        audio: np.ndarray | None = None,
     ) -> float | None:
-        """Add a sample; returns its score against the voiceprint before adding (None for
-        the first sample) - a low score means a wrong person or a bad recording."""
+        """Add a sample (with its recording when ``audio`` is given); returns its score
+        against the voiceprint before adding (None for the first sample) - a low score
+        means a wrong person or a bad recording."""
         with self._lock:
             speaker = self.speakers[speaker_id]
             before = speaker.voiceprint()
             vector = normalize(np.asarray(embedding, dtype=np.float32))
+            now = datetime.now(UTC)
+            recording = self._write_recording(speaker_id, now, audio) if audio is not None else ""
             speaker.samples.append(
-                Sample(vector, datetime.now(UTC).isoformat(timespec="seconds"), seconds, text)
+                Sample(vector, now.isoformat(timespec="seconds"), seconds, text, recording)
             )
             self.save()
             return None if before is None else float(np.dot(vector, before))
@@ -244,9 +283,59 @@ class SpeakerStore:
             samples = self.speakers[speaker_id].samples
             if not 0 <= index < len(samples):
                 return False
-            del samples[index]
+            removed = samples.pop(index)
             self.save()
+            if removed.recording:
+                (self.recordings / speaker_id / removed.recording).unlink(missing_ok=True)
             return True
+
+    def _write_recording(self, speaker_id: str, at: datetime, audio: np.ndarray) -> str:
+        folder = self.recordings / speaker_id
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"{at:%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.wav"
+        fd, tmp = tempfile.mkstemp(dir=folder, prefix=".rec-")
+        with os.fdopen(fd, "wb") as file:
+            file.write(to_wav(audio))
+        os.replace(tmp, folder / name)
+        return name
+
+    def rebuild(
+        self, embed: Callable[[np.ndarray], np.ndarray], max_seconds: float
+    ) -> dict[str, dict[str, int]]:
+        """Embed every sample again from its recording (e.g. after changing the model).
+
+        Samples without a recording (older versions) or whose recording is missing or has
+        too little speech keep their embedding. Embedding runs outside the lock.
+        """
+        with self._lock:
+            jobs = [
+                (sid, sample.recording)
+                for sid, speaker in self.speakers.items()
+                for sample in speaker.samples
+                if sample.recording
+            ]
+        fresh: dict[tuple[str, str], np.ndarray] = {}
+        for sid, recording in jobs:
+            path = self.recordings / sid / recording
+            if not path.is_file():
+                continue
+            speech = speech_only(from_wav(path.read_bytes()), max_seconds)
+            if len(speech) / RATE >= self.min_speech:
+                fresh[(sid, recording)] = normalize(np.asarray(embed(speech), dtype=np.float32))
+        report: dict[str, dict[str, int]] = {}
+        with self._lock:
+            for sid, speaker in self.speakers.items():
+                counts = report[sid] = {"rebuilt": 0, "without_recording": 0, "kept": 0}
+                for sample in speaker.samples:
+                    if not sample.recording:
+                        counts["without_recording"] += 1
+                    elif (vector := fresh.get((sid, sample.recording))) is not None:
+                        sample.embedding = vector
+                        counts["rebuilt"] += 1
+                    else:
+                        counts["kept"] += 1
+            self.save()
+        return report
 
     # --- identification ---
 

@@ -384,7 +384,7 @@ the sensor <strong>"Last speaker"</strong>.</p>
     (<code>context.user_id</code>).</li>
   <li><strong>Recognition thresholds:</strong> shared threshold, margin, minimum speech and each
     person's threshold. Saved values go to the service and apply from the next sentence, without a
-    restart.</li>
+    restart. Plus <strong>Probable speaker from</strong> (default 0.40, kept in HA) - see below.</li>
 </ul>
 
 <h2 id="pipeline">6. Pipeline setup</h2>
@@ -433,14 +433,23 @@ data:
     short. Please say a longer sentence.". After silence or a cut-off conversation it asks again ("I
     did not hear anything. Please say a sentence."), and after 3 attempts without a new sample it
     stops.</li>
-  <li>After the last sample: "Done, recorded 10 voice samples for Anna.". The voiceprint works right
+  <li>After the last sample: "Done. Voiceprint of Anna: 10 samples.". The voiceprint works right
     away.</li>
 </ol>
 <p>Enrollment also works without the <code>satellite</code> field, but then each sentence starts
 with the wake word. Progress is shown in the <code>enrollment</code> attribute of the "Last speaker"
 sensor. To cancel: <code>speaker_id.stop_enrollment</code>.</p>
-<p><strong>Enrollment went wrong?</strong> Add more samples with the same action (new ones are added
-to the old ones) or start over: <code>speaker_id.delete_speaker</code> and enroll again. You can add
+<p><strong>Adding samples in series.</strong> Run the same action again: the new samples are added to
+the saved ones and the counter counts all of them – a second series of 10 starts with "Adding voice
+samples for Anna: 10 saved, recording up to 20" and says "Recorded 11 of 20", a third one "Recorded 24
+of 30". The voiceprint is the mean of all samples, so 3 series over a few days (different satellites,
+times of day) make it much more precise; calibrate after each series. Every sample keeps its
+recording in the service (<code>/data/recordings/&lt;person&gt;/</code>, about 0.2 MB per sample), so
+<code>speaker_id.rebuild_voiceprints</code> can compute all samples again later, e.g. after a model
+change. Samples from versions before 0.2.0 have no recording and stay as they are.</p>
+<p><strong>Enrollment went wrong?</strong> Add more samples with the same action or start over:
+<code>speaker_id.reset_speaker</code> (deletes the samples and recordings, keeps the person) and enroll
+again. You can add
 a single sentence afterwards with <code>speaker_id.add_last_sample</code>: the last utterance (at
 most 10 min old) becomes a sample of the given person.</p>
 <p class="tip"><strong>Good samples:</strong> record through the satellite and from the distance the
@@ -605,8 +614,10 @@ room, and "my brother" is a specific family member.</p>
 
 <h3>Automations</h3>
 <p>The <strong>"Last speaker"</strong> sensor (state: name or <code>unknown</code>; attributes:
-<code>speaker</code>, <code>name</code>, <code>person</code>, <code>score</code>,
-<code>scores</code>, <code>speech_seconds</code>, <code>enrollment</code>) and the
+<code>speaker</code>, <code>name</code>, <code>person</code>, <code>user_id</code>,
+<code>score</code>, <code>scores</code>, <code>speech_seconds</code>, <code>probable</code>,
+<code>probable_name</code>, <code>probable_person</code>, <code>probable_user_id</code>,
+<code>enrollment</code>) and the
 <code>speaker_id_identified</code> event. The utterance text is deliberately kept out of the
 history.</p>
 <p>HA runs automations with a sentence trigger before the agent, so they do not get the speaker
@@ -614,7 +625,7 @@ directly. The sensor is updated in the same command, just before them, though �
 seconds ago is the speaker of this sentence. A handy macro in
 <code>/config/custom_templates/speaker.jinja</code>:</p>
 <pre><code>{% macro speaker(max_s=20) -%}
-  {%- set s = states.sensor.assist_speaker_id_last_speaker -%}
+  {%- set s = states.sensor.speaker_id_last_speaker -%}
   {%- if s and (now() - s.last_updated).total_seconds() &lt;= max_s -%}
     {{- s.attributes.speaker or '' -}}
   {%- endif -%}
@@ -634,8 +645,18 @@ actions:
       - set_conversation_response: "Ringing your phone."
     else:
       - set_conversation_response: "I don't know who is asking. Whose phone should I find?"</code></pre>
-<p>The sensor id depends on the HA language; in Polish it is
-<code>sensor.assist_speaker_id_ostatni_mowca</code>.</p>
+<p>The entity ids are the same in every HA language: <code>sensor.speaker_id_last_speaker</code>,
+<code>stt.speaker_id_speech_to_text</code>, <code>conversation.speaker_id_agent</code>. Ids of version
+0.1.x (built from the translated name) are renamed automatically - check the pipelines afterwards.</p>
+<h3 id="probable">Probable speaker</h3>
+<p>When a voice does not reach its person's threshold (or is too close to the runner-up), the result
+is <code>unknown</code>, but the most similar person is still reported as <strong>probable</strong> when
+the similarity is at least <strong>Probable speaker from</strong> (default 0.40): attributes
+<code>probable</code>, <code>probable_name</code>, <code>probable_person</code>,
+<code>probable_user_id</code>. Assist Router then answers "I think it is Anna asking. Today you
+have…". A probable speaker never runs commands as that person's HA user - the HA
+<code>Context</code> has no room for extra fields, so automations read it from the sensor:
+<code>state_attr('sensor.speaker_id_last_speaker', 'probable_person')</code>.</p>
 
 <h2 id="announcements">10. Announcements in your own voice</h2>
 <p>„OK Nabu, <strong>ogłoszenie</strong>, dzieci, proszę przyjść na obiad.” (“OK Nabu,
@@ -675,7 +696,9 @@ speech synthesis. You can hear who is calling and in what tone.</p>
   <tr><td><code>speaker_id.add_last_sample</code></td><td>the last utterance (at most 10 min old) as a person's sample</td></tr>
   <tr><td><code>speaker_id.calibrate</code></td><td>calibration report and suggested thresholds; <code>apply: true</code> saves the thresholds</td></tr>
   <tr><td><code>speaker_id.set_speaker</code></td><td>changes a person's name and own threshold</td></tr>
-  <tr><td><code>speaker_id.delete_speaker</code></td><td>deletes a person's voiceprint</td></tr>
+  <tr><td><code>speaker_id.reset_speaker</code></td><td>deletes all samples and recordings of a person and their own threshold; the person stays</td></tr>
+  <tr><td><code>speaker_id.rebuild_voiceprints</code></td><td>computes every sample again from its recording (report: rebuilt / without recording / kept)</td></tr>
+  <tr><td><code>speaker_id.delete_speaker</code></td><td>deletes a person's voiceprint and recordings</td></tr>
   <tr><td><code>speaker_id.list_speakers</code></td><td>list of people with sample counts and thresholds</td></tr>
   <tr><td><code>speaker_id.announce_last</code></td><td>plays the last utterance as an announcement</td></tr>
 </table></div>
@@ -712,12 +735,14 @@ alarm or anything else that requires authentication.</p>
 <p>A voiceprint is biometric data (GDPR, Article 9). Therefore:</p>
 <ul>
   <li>everything runs <strong>locally</strong>, with no cloud;</li>
-  <li>the service stores <strong>only vectors</strong> (<code>/data/speakers.json</code>), no
-    recordings (a vector describes the timbre of a voice, but is not a recording);</li>
+  <li>the service stores the vectors (<code>/data/speakers.json</code>) and the
+    <strong>recordings of the voice samples</strong> (<code>/data/recordings/</code>, needed to build
+    the voiceprints again); nothing leaves your network;</li>
   <li>the last utterance is kept only in memory, for at most 10 minutes (for
     <code>add_last_sample</code> and announcements);</li>
   <li>the utterance text does not go into the sensor history;</li>
-  <li><code>delete_speaker</code> removes a person's voiceprint completely;</li>
+  <li><code>delete_speaker</code> removes a person's voiceprint and recordings completely,
+    <code>reset_speaker</code> their samples and recordings;</li>
   <li>household members – and parents, for children – should know about the recognition and agree
     to it.</li>
 </ul>

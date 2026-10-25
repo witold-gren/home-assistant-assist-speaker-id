@@ -32,6 +32,13 @@ delete_speaker:
       required: true
       selector:
         text:
+reset_speaker:
+  fields:
+    speaker:
+      required: true
+      selector:
+        text:
+rebuild_voiceprints:
 set_speaker:
   fields:
     speaker:

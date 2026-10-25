@@ -5,8 +5,9 @@ GET    /api/settings                     shared threshold, margin, min_speech
 PUT    /api/settings                     {"threshold": 0.6, "margin": 0.05, "min_speech": 1.0}
 GET    /api/speakers                     enrolled speakers (no embeddings)
 PUT    /api/speakers/{id}                {"name": ..., "threshold": null|float}
-DELETE /api/speakers/{id}                forget a speaker (voiceprint deleted)
-POST   /api/speakers/{id}/samples        body: WAV -> one sample
+DELETE /api/speakers/{id}                forget a speaker (voiceprint and recordings deleted)
+POST   /api/speakers/{id}/reset          delete all samples and recordings, keep the speaker
+POST   /api/speakers/{id}/samples        body: WAV -> one sample (recording kept)
 POST   /api/speakers/{id}/samples/last   the last utterance (<= 10 min) -> sample
 DELETE /api/speakers/{id}/samples/{n}
 POST   /api/enrollment                   {"speaker": id, "count": 10} - next N utterances
@@ -15,6 +16,7 @@ GET    /api/last                         last utterance: text, result, scores
 GET    /api/last.wav                     its audio (RAM only, 10 min)
 POST   /api/identify                     body: WAV -> identification
 POST   /api/calibrate[?apply=1]          threshold report (and apply it)
+POST   /api/rebuild                      embed all samples again from their recordings
 """
 
 from __future__ import annotations
@@ -58,12 +60,14 @@ def build_app(service: SpeakerService, token: str | None) -> web.Application:
         return speaker_id
 
     async def embedding_of_wav(request: web.Request):
+        """(embedding, seconds of speech, audio) of an uploaded WAV."""
         audio = from_wav(await request.read())
         speech = speech_only(audio, service.settings.max_speech)
         if len(speech) / RATE < store.min_speech:
             raise ValueError(f"not enough speech ({len(speech) / RATE:.1f} s)")
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, service.embedder.embed, speech), len(speech) / RATE
+        embedding = await loop.run_in_executor(None, service.embedder.embed, speech)
+        return embedding, len(speech) / RATE, audio
 
     @routes.get("/api/info")
     async def info(_: web.Request) -> web.Response:
@@ -118,11 +122,18 @@ def build_app(service: SpeakerService, token: str | None) -> web.Application:
         store.delete(speaker_id)
         return web.json_response({"deleted": speaker_id})
 
+    @routes.post("/api/speakers/{id}/reset")
+    async def reset(request: web.Request) -> web.Response:
+        speaker_id = speaker_or_404(request)
+        if service.enrollment and service.enrollment.speaker == speaker_id:
+            service.enrollment = None
+        return web.json_response(store.reset(speaker_id).summary())
+
     @routes.post("/api/speakers/{id}/samples")
     async def add_sample(request: web.Request) -> web.Response:
         speaker_id = speaker_or_404(request)
-        embedding, seconds = await embedding_of_wav(request)
-        score = store.add_sample(speaker_id, embedding, seconds)
+        embedding, seconds, audio = await embedding_of_wav(request)
+        score = store.add_sample(speaker_id, embedding, seconds, audio=audio)
         return web.json_response({**store.speakers[speaker_id].summary(), "score": score})
 
     @routes.post("/api/speakers/{id}/samples/last")
@@ -147,7 +158,8 @@ def build_app(service: SpeakerService, token: str | None) -> web.Application:
         count = int(body.get("count", 10))
         if not 1 <= count <= 50:
             raise ValueError("count: 1-50")
-        service.enrollment = Enrollment(speaker_id, count)
+        start = len(store.speakers[speaker_id].samples)
+        service.enrollment = Enrollment(speaker_id, count, start=start)
         _LOGGER.info("Enrollment started: next %d utterance(s) -> %s", count, speaker_id)
         return web.json_response(service.enrollment.to_dict())
 
@@ -172,7 +184,7 @@ def build_app(service: SpeakerService, token: str | None) -> web.Application:
 
     @routes.post("/api/identify")
     async def identify(request: web.Request) -> web.Response:
-        embedding, seconds = await embedding_of_wav(request)
+        embedding, seconds, _ = await embedding_of_wav(request)
         return web.json_response({**store.identify(embedding).to_dict(), "speech_seconds": seconds})
 
     @routes.post("/api/calibrate")
@@ -182,6 +194,15 @@ def build_app(service: SpeakerService, token: str | None) -> web.Application:
             store.apply_calibration(report)
             report["applied"] = True
         return web.json_response(report)
+
+    @routes.post("/api/rebuild")
+    async def rebuild(_: web.Request) -> web.Response:
+        loop = asyncio.get_running_loop()
+        report = await loop.run_in_executor(
+            None, store.rebuild, service.embedder.embed, service.settings.max_speech
+        )
+        _LOGGER.info("Voiceprints rebuilt from recordings: %s", report)
+        return web.json_response({"speakers": report})
 
     app.add_routes(routes)
     return app

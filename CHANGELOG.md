@@ -3,6 +3,11 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 Add-on (service) changes: [speaker_id/CHANGELOG.md](speaker_id/CHANGELOG.md).
 
+## [0.1.1] - 2026-10-25
+
+### Added
+- Logo images (`logo`, `dark_logo`) next to the icons in `brand/`.
+
 ## [0.1.0] - 2026-10-25
 
 First public release of the Assist Speaker ID integration (domain `speaker_id`).

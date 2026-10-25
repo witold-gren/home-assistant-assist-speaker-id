@@ -1,0 +1,11 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components", "wyoming_speaker_id"]
+combine-as-imports = true

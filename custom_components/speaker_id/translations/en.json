@@ -1,0 +1,211 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Assist Speaker ID service",
+        "description": "wyoming-speaker-id: a Wyoming speech-to-text proxy (in front of e.g. faster-whisper) that also identifies the speaker.",
+        "data": {
+          "host": "Host",
+          "port": "Wyoming port",
+          "api_port": "HTTP API port",
+          "api_token": "API token (optional)"
+        }
+      },
+      "hassio_confirm": {
+        "title": "Assist Speaker ID add-on",
+        "description": "Set up the Assist Speaker ID add-on found by the Supervisor?"
+      },
+      "reconfigure": {
+        "title": "Assist Speaker ID service",
+        "description": "Change the address, ports or API token of the service. People and agent options stay unchanged.",
+        "data": {
+          "host": "Host",
+          "port": "Wyoming port",
+          "api_port": "HTTP API port",
+          "api_token": "API token (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the service (Wyoming port or HTTP API).",
+      "invalid_auth": "Wrong API token.",
+      "no_asr": "The service reports no speech-to-text program - is the upstream ASR server reachable?"
+    },
+    "abort": {
+      "already_configured": "This service is already configured.",
+      "reconfigure_successful": "The service settings were updated."
+    }
+  },
+  "options": {
+    "step": {
+      "people": {
+        "title": "Agent and people",
+        "description": "Enrolled voices (number of samples): {speakers}.\n\nLink every voice to a Home Assistant person (the fields with names below). The \"Agent with speaker\" passes requests to the chosen agent and adds a line with the speaker's name to its prompt - {name} is replaced by the name.",
+        "data": {
+          "agent_id": "Conversation agent to pass requests to",
+          "prompt": "Line added to the agent's system prompt",
+          "set_user": "Run requests as the speaker's Home Assistant user"
+        },
+        "data_description": {
+          "prompt": "E.g. \"The person speaking is {name}.\" - only for the \"Agent with speaker\".",
+          "set_user": "The request runs with the permissions of the linked person's Home Assistant user."
+        }
+      },
+      "init": {
+        "title": "Assist Speaker ID",
+        "menu_options": {
+          "people": "Agent and people",
+          "thresholds": "Recognition thresholds"
+        }
+      },
+      "thresholds": {
+        "title": "Recognition thresholds",
+        "description": "The result is the **similarity** of an utterance to a person's voiceprint (0-1; \"who is speaking?\" says it in percent). A person is recognised when the similarity reaches **their threshold** and beats the runner-up by the **margin**. A higher threshold is stricter: fewer mistakes, more \"unknown\". Details and calibration: README.\n\nPeople (samples · own threshold, — = shared):\n{speakers}\n\nAn empty person field = the shared threshold. Calibration with \"apply\" overwrites the per-person thresholds.",
+        "data": {
+          "threshold": "Shared threshold",
+          "margin": "Margin over the runner-up",
+          "min_speech": "Minimum speech"
+        },
+        "data_description": {
+          "threshold": "For people without an own threshold. Typically 0.5-0.7.",
+          "margin": "How much the best person must beat the second one (0.05 = 5 points). Larger for similar voices, e.g. siblings.",
+          "min_speech": "Shorter utterances are always \"unknown\": too little speech to recognise a voice."
+        }
+      }
+    },
+    "abort": {
+      "thresholds_saved": "Saved in the service - effective from the next utterance.",
+      "cannot_connect": "Cannot connect to the Assist Speaker ID service."
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Assist Speaker ID service."
+    }
+  },
+  "entity": {
+    "stt": {
+      "stt": {
+        "name": "Speech to text with speaker"
+      }
+    },
+    "conversation": {
+      "agent": {
+        "name": "Agent with speaker"
+      }
+    },
+    "sensor": {
+      "last_speaker": {
+        "name": "Last speaker"
+      }
+    }
+  },
+  "services": {
+    "start_enrollment": {
+      "name": "Start enrollment",
+      "description": "The next utterances (from any voice satellite) become voice samples of this speaker.",
+      "fields": {
+        "speaker": {
+          "name": "Speaker",
+          "description": "Speaker id: a-z, 0-9, _"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name"
+        },
+        "count": {
+          "name": "Count",
+          "description": "How many utterances to take"
+        },
+        "satellite": {
+          "name": "Satellite",
+          "description": "The satellite asks for each sentence itself (no wake word). Empty = say commands as usual, with the wake word."
+        }
+      }
+    },
+    "stop_enrollment": {
+      "name": "Stop enrollment",
+      "description": "Stop taking utterances as samples."
+    },
+    "add_last_sample": {
+      "name": "Add last utterance",
+      "description": "Add the last utterance (at most 10 minutes old) as a sample of this speaker.",
+      "fields": {
+        "speaker": {
+          "name": "Speaker",
+          "description": "Speaker id"
+        }
+      }
+    },
+    "delete_speaker": {
+      "name": "Delete speaker",
+      "description": "Forget the speaker and delete the voiceprint.",
+      "fields": {
+        "speaker": {
+          "name": "Speaker",
+          "description": "Speaker id"
+        }
+      }
+    },
+    "set_speaker": {
+      "name": "Set speaker",
+      "description": "Create or rename a speaker, set an own threshold.",
+      "fields": {
+        "speaker": {
+          "name": "Speaker",
+          "description": "Speaker id"
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name"
+        },
+        "threshold": {
+          "name": "Threshold",
+          "description": "Own cosine threshold, empty = global"
+        }
+      }
+    },
+    "list_speakers": {
+      "name": "List speakers",
+      "description": "Enrolled speakers with their number of samples."
+    },
+    "calibrate": {
+      "name": "Calibrate",
+      "description": "Compare every speaker's samples with everybody else's and suggest thresholds.",
+      "fields": {
+        "apply": {
+          "name": "Apply",
+          "description": "Store the suggested thresholds"
+        }
+      }
+    },
+    "announce_last": {
+      "name": "Announce the last utterance",
+      "description": "Plays the last utterance - the speaker's own recording, unchanged - on speakers (intercom). By default on every satellite except \"exclude\".",
+      "fields": {
+        "satellites": {
+          "name": "Satellites",
+          "description": "Empty = all that support announcements."
+        },
+        "media_players": {
+          "name": "Media players",
+          "description": "Additionally, e.g. HomePods (Music Assistant)."
+        },
+        "exclude": {
+          "name": "Exclude",
+          "description": "The satellite that recorded the announcement."
+        },
+        "preannounce": {
+          "name": "Chime first",
+          "description": "A short chime before the recording."
+        },
+        "prefer_players": {
+          "name": "Players first",
+          "description": "One speaker per room: the media player (e.g. a HomePod) when available, otherwise the satellite. The announcing room gets nothing."
+        },
+        "max_age": {
+          "name": "Maximum recording age",
+          "description": "An older last utterance is not announced."
+        }
+      }
+    }
+  }
+}

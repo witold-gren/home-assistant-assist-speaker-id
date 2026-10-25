@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assist Speaker ID</title>
+<style>
+:root {
+  --bg: #f8fafc; --fg: #0f172a; --muted: #64748b; --line: #e2e8f0; --card: #ffffff;
+  --accent: #1d4ed8; --accent-soft: #dbeafe; --code: #f1f5f9; --ok: #166534; --ok-soft: #dcfce7;
+  --bad: #b91c1c; --bad-soft: #fee2e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a; --fg: #f1f5f9; --muted: #94a3b8; --line: #334155; --card: #1e293b;
+    --accent: #60a5fa; --accent-soft: #172554; --code: #1e293b; --ok: #86efac; --ok-soft: #14361f;
+    --bad: #fca5a5; --bad-soft: #3b1515;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f172a; --fg: #f1f5f9; --muted: #94a3b8; --line: #334155; --card: #1e293b;
+  --accent: #60a5fa; --accent-soft: #172554; --code: #1e293b; --ok: #86efac; --ok-soft: #14361f;
+  --bad: #fca5a5; --bad-soft: #3b1515;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; gap: 20px; align-items: center; margin-bottom: 8px; }
+header img { width: 72px; height: 72px; flex: none; }
+h1 { font-size: 2.1rem; margin: 0; letter-spacing: -0.01em; }
+.lead { color: var(--muted); margin: 4px 0 0; }
+h2 { font-size: 1.45rem; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+p, li { max-width: 72ch; }
+a { color: var(--accent); }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+  font-size: .88em; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .95em; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: var(--card); }
+.table { overflow-x: auto; }
+nav { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 18px; margin: 24px 0; }
+nav ol { margin: 6px 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+nav li { break-inside: avoid; }
+@media (max-width: 640px) { nav ol { columns: 1; } h1 { font-size: 1.7rem; } header { align-items: flex-start; } }
+.lang { margin: 4px 0 0; font-size: 0.9em; color: var(--muted); }
+.note { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.tip { background: var(--ok-soft); border-left: 4px solid var(--ok); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.warn { background: var(--bad-soft); border-left: 4px solid var(--bad); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.flow { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; margin: 16px 0; overflow-x: auto; }
+.flow svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.flow .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.flow .hot { fill: var(--accent-soft); stroke: var(--accent); }
+.flow .okbox { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+.flow .badbox { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+.flow text { fill: var(--fg); font: 13px system-ui, sans-serif; }
+.flow .small { fill: var(--muted); font-size: 11px; }
+.flow .arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+.flow .axis { stroke: var(--muted); stroke-width: 1.5; }
+.flow .own { fill: var(--ok); }
+.flow .other { fill: var(--bad); }
+.flow .mark { stroke: var(--accent); stroke-width: 2.5; }
+.flow .dash { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.flow marker path { fill: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: .9em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/icon.png" alt="">
+  <div>
+    <h1>Assist Speaker ID</h1>
+    <p class="lead">Rozpoznawanie domowników po głosie dla Assista w Home Assistant. Asystent wie,
+    kto pyta, i odpowiada właśnie tej osobie. Wszystko działa lokalnie.</p>
+    <p class="lang"><strong>Polski</strong> · <a href="../en/" hreflang="en">English</a> ·
+    <a href="https://github.com/witold-gren/home-assistant-assist-speaker-id">GitHub</a></p>
+  </div>
+</header>
+
+<nav>
+  <strong>Spis treści</strong>
+  <ol>
+    <li><a href="#co">Co to jest i po co</a></li>
+    <li><a href="#jak">Jak działa</a></li>
+    <li><a href="#rozpoznanie">Rozpoznanie od środka</a></li>
+    <li><a href="#wymagania">Wymagania</a></li>
+    <li><a href="#instalacja">Instalacja</a></li>
+    <li><a href="#pipeline">Ustawienie pipeline'u</a></li>
+    <li><a href="#wzorce">Nagrywanie wzorców głosu</a></li>
+    <li><a href="#progi">Wyniki, progi i kalibracja</a></li>
+    <li><a href="#uzycie">Korzystanie na co dzień</a></li>
+    <li><a href="#ogloszenia">Ogłoszenia Twoim głosem</a></li>
+    <li><a href="#akcje">Akcje i API</a></li>
+    <li><a href="#ograniczenia">Ograniczenia</a></li>
+    <li><a href="#prywatnosc">Prywatność</a></li>
+  </ol>
+</nav>
+
+<h2 id="co">1. Co to jest i po co</h2>
+<p>Assist zamienia mowę na tekst, ale nie wie, <strong>kto</strong> mówi. Satelity głosowe
+(Home Assistant Voice PE, ESPHome) wysyłają polecenie bez użytkownika, więc dla Home Assistant
+każde zdanie jest anonimowe. Kłopot pojawia się przy pytaniach w pierwszej osobie:</p>
+<ul>
+  <li>„Jakie <strong>mam</strong> dzisiaj zajęcia?” – czyj plan lekcji podać?</li>
+  <li>„Gdzie jest <strong>mój</strong> telefon?” – na który telefon zadzwonić?</li>
+  <li>„Co <strong>mnie</strong> dzisiaj czeka?” – czyj kalendarz przeczytać?</li>
+  <li>„Dobranoc” – inaczej do dziecka, inaczej do dorosłego.</li>
+</ul>
+<p>Whisper i inne modele zamiany mowy na tekst nie rozpoznają mówcy. Diaryzacja (np. WhisperX)
+odpowiada tylko na pytanie „kto kiedy mówił” z anonimowymi etykietami, a nie „który to
+domownik”. <strong>Assist Speaker ID</strong> dokłada brakujący element: zamienia głos na
+„odcisk” (wektor liczb), porównuje go z zapisanymi wzorcami domowników i przekazuje wynik dalej –
+agentowi konwersacji, modelowi LLM i automatyzacjom.</p>
+<p>Projekt składa się z dwóch części w jednym repozytorium:</p>
+<div class="table"><table>
+  <tr><th>Część</th><th>Co robi</th><th>Instalacja</th></tr>
+  <tr><td><strong>Usługa wyoming-speaker-id</strong></td>
+    <td>Pośrednik Wyoming przed Twoim serwerem zamiany mowy na tekst (np. Whisper). Przekazuje
+    dźwięk dalej bez zmian, a równolegle liczy odcisk głosu i dopisuje mówcę do wyniku.</td>
+    <td>dodatek HA albo kontener Docker na innym komputerze</td></tr>
+  <tr><td><strong>Integracja Assist Speaker ID</strong></td>
+    <td>Encja zamiany mowy na tekst „Mowa na tekst z mówcą”, agent-opakowanie „Agent z mówcą”,
+    sensor „Ostatni mówca”, akcje do nagrywania wzorców, kalibracji i ogłoszeń.</td>
+    <td>HACS (repozytorium niestandardowe, typ „Integracja”)</td></tr>
+</table></div>
+<p class="tip">Najwięcej daje w parze z <a href="https://witold-gren.github.io/home-assistant-assist-router/pl/">Assist Routerem</a>:
+on używa mówcy do pytań w pierwszej osobie, pokoju mówcy, określeń rodzinnych („mój brat”),
+odpowiedzi na „Kto to mówi?” i ogłoszeń. Assist Speaker ID działa jednak z każdym agentem.</p>
+
+<h2 id="jak">2. Jak działa</h2>
+<div class="flow">
+<svg viewBox="0 0 900 400" role="img" aria-label="Schemat: satelita, encja zamiany mowy na tekst z mówcą, usługa wyoming-speaker-id, Whisper i model głosu, wynik z mówcą, agent, sensor">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box" x="10" y="30" width="150" height="56" rx="8"/>
+  <text x="85" y="54" text-anchor="middle">Satelita</text>
+  <text class="small" x="85" y="72" text-anchor="middle">słowo wybudzające, dźwięk</text>
+  <rect class="hot" x="200" y="30" width="230" height="56" rx="8"/>
+  <text x="315" y="54" text-anchor="middle">HA: „Mowa na tekst z mówcą”</text>
+  <text class="small" x="315" y="72" text-anchor="middle">encja STT integracji</text>
+  <rect class="hot" x="470" y="30" width="220" height="56" rx="8"/>
+  <text x="580" y="54" text-anchor="middle">wyoming-speaker-id</text>
+  <text class="small" x="580" y="72" text-anchor="middle">dodatek albo kontener, port 10350</text>
+  <rect class="box" x="730" y="10" width="160" height="50" rx="8"/>
+  <text x="810" y="32" text-anchor="middle">Whisper</text>
+  <text class="small" x="810" y="49" text-anchor="middle">dźwięk bez zmian → tekst</text>
+  <rect class="box" x="730" y="76" width="160" height="50" rx="8"/>
+  <text x="810" y="98" text-anchor="middle">Model głosu CAM++</text>
+  <text class="small" x="810" y="115" text-anchor="middle">równolegle, ~90 ms</text>
+  <path class="arrow" d="M160,58 H198"/>
+  <path class="arrow" d="M430,58 H468"/>
+  <path class="arrow" d="M690,50 L728,36"/>
+  <path class="arrow" d="M690,66 L728,98"/>
+  <rect class="box" x="400" y="170" width="380" height="56" rx="8"/>
+  <text x="590" y="194" text-anchor="middle">transcript: text + speaker, speaker_score, …</text>
+  <text class="small" x="590" y="212" text-anchor="middle">tekst identyczny jak z samego Whispera</text>
+  <path class="arrow" d="M580,86 V168"/>
+  <rect class="hot" x="40" y="170" width="300" height="56" rx="8"/>
+  <text x="190" y="194" text-anchor="middle">Wynik w bieżącym przebiegu pipeline'u</text>
+  <text class="small" x="190" y="212" text-anchor="middle">ten sam przebieg: STT → agent</text>
+  <path class="arrow" d="M400,198 H342"/>
+  <rect class="box" x="10" y="290" width="200" height="70" rx="8"/>
+  <text x="110" y="314" text-anchor="middle">„Agent z mówcą”</text>
+  <text class="small" x="110" y="332" text-anchor="middle">dopisuje „Pyta: Anna.”</text>
+  <text class="small" x="110" y="348" text-anchor="middle">→ dowolny agent</text>
+  <rect class="box" x="240" y="290" width="200" height="70" rx="8"/>
+  <text x="340" y="314" text-anchor="middle">Assist Router</text>
+  <text class="small" x="340" y="332" text-anchor="middle">get_speaker(): „mam”, „mój”,</text>
+  <text class="small" x="340" y="348" text-anchor="middle">pokój, rodzina, ogłoszenia</text>
+  <rect class="box" x="470" y="290" width="200" height="70" rx="8"/>
+  <text x="570" y="314" text-anchor="middle">Sensor „Ostatni mówca”</text>
+  <text class="small" x="570" y="332" text-anchor="middle">zdarzenie speaker_id_identified</text>
+  <text class="small" x="570" y="348" text-anchor="middle">→ automatyzacje</text>
+  <rect class="box" x="700" y="290" width="190" height="70" rx="8"/>
+  <text x="795" y="314" text-anchor="middle">Ostatnie nagranie</text>
+  <text class="small" x="795" y="332" text-anchor="middle">tylko w RAM, 10 min</text>
+  <text class="small" x="795" y="348" text-anchor="middle">→ próbka albo ogłoszenie</text>
+  <path class="arrow" d="M120,226 L110,288"/>
+  <path class="arrow" d="M230,226 L330,288"/>
+  <path class="arrow" d="M300,226 L560,288"/>
+  <path class="arrow" d="M700,226 L790,288"/>
+</svg>
+</div>
+<ol>
+  <li><strong>Satelita</strong> wykrywa słowo wybudzające i wysyła nagranie polecenia do pipeline'u
+    Assista.</li>
+  <li>Pipeline używa encji <strong>„Mowa na tekst z mówcą”</strong> zamiast zwykłego Whispera.
+    Encja rozmawia z usługą przez protokół Wyoming, tak jak wbudowana integracja Wyoming.</li>
+  <li><strong>Usługa wyoming-speaker-id</strong> przekazuje dźwięk do Twojego serwera
+    zamiany mowy na tekst bez żadnych zmian i jednocześnie zbiera go dla siebie. Gdy nagranie się
+    kończy, liczy odcisk głosu w czasie, w którym Whisper i tak jeszcze transkrybuje.</li>
+  <li>Usługa odsyła <strong>ten sam tekst co Whisper</strong>, z dopisanymi polami:
+    <code>speaker</code> (id osoby albo <code>unknown</code>), <code>speaker_name</code>,
+    <code>speaker_score</code>, <code>speaker_scores</code> (wyniki wszystkich osób),
+    <code>speech_seconds</code>.</li>
+  <li>Integracja zapamiętuje mówcę <strong>dla bieżącego przebiegu pipeline'u</strong>. HA wywołuje
+    zamianę mowy na tekst i agenta w tym samym zadaniu, więc agent dostaje mówcę właśnie tego
+    zdania, a nie zdania z innego pokoju wypowiedzianego w tej samej chwili.</li>
+  <li>Dalej mówcę mogą wykorzystać: agent-opakowanie, Assist Router albo inny agent przez
+    <code>get_speaker()</code>, a także automatyzacje przez sensor i zdarzenie.</li>
+</ol>
+<p class="note"><strong>Dlaczego pośrednik, a nie osobny model obok?</strong> Klient Wyoming w HA
+czyta z wyniku tylko tekst, a encja zamiany mowy na tekst nie wie, z której satelity przyszło
+nagranie. Dlatego usługa dopisuje mówcę do wyniku transkrypcji, a integracja ma własnego klienta,
+który te pola odczytuje. Zwykły klient Wyoming dodatkowe pola pomija, więc usługę można bez
+ryzyka wpiąć w miejsce Whispera: w najgorszym razie działa jak sam Whisper.</p>
+
+<h2 id="rozpoznanie">3. Rozpoznanie od środka</h2>
+<div class="flow">
+<svg viewBox="0 0 900 250" role="img" aria-label="Schemat: dźwięk, wykrywanie mowy, model CAM++, wektor 192 liczb, porównanie ze wzorcami, decyzja: próg i margines">
+  <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box" x="10" y="20" width="130" height="64" rx="8"/>
+  <text x="75" y="46" text-anchor="middle">Dźwięk</text>
+  <text class="small" x="75" y="64" text-anchor="middle">16 kHz, mono</text>
+  <rect class="box" x="170" y="20" width="150" height="64" rx="8"/>
+  <text x="245" y="46" text-anchor="middle">Wykrywanie mowy</text>
+  <text class="small" x="245" y="64" text-anchor="middle">bez ciszy, do 8 s mowy</text>
+  <rect class="hot" x="350" y="20" width="150" height="64" rx="8"/>
+  <text x="425" y="46" text-anchor="middle">Model CAM++</text>
+  <text class="small" x="425" y="64" text-anchor="middle">sherpa-onnx, CPU</text>
+  <rect class="box" x="530" y="20" width="150" height="64" rx="8"/>
+  <text x="605" y="46" text-anchor="middle">Wektor</text>
+  <text class="small" x="605" y="64" text-anchor="middle">192 liczby = barwa głosu</text>
+  <rect class="box" x="710" y="20" width="180" height="64" rx="8"/>
+  <text x="800" y="46" text-anchor="middle">Porównanie</text>
+  <text class="small" x="800" y="64" text-anchor="middle">cosinus z każdym wzorcem</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M140,52 H168"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M320,52 H348"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M500,52 H528"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M680,52 H708"/>
+  <rect class="box" x="560" y="120" width="330" height="110" rx="8"/>
+  <text x="575" y="144">Anna 0,82 · Kasia 0,41 · Tomek 0,18 · Jan 0,12</text>
+  <text class="small" x="575" y="168">1. najlepszy wynik ≥ próg osoby (np. 0,50)?</text>
+  <text class="small" x="575" y="186">2. przewaga nad drugą osobą ≥ margines (np. 0,05)?</text>
+  <text class="small" x="575" y="210">oba „tak” → Anna; inaczej → unknown</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M800,84 V118"/>
+  <rect class="box" x="10" y="120" width="500" height="110" rx="8"/>
+  <text x="25" y="144">Wzorzec osoby</text>
+  <text class="small" x="25" y="166">średnia wektorów z 10–15 nagranych zdań tej osoby</text>
+  <text class="small" x="25" y="184">zapisana w speakers.json; nagrania nie są przechowywane</text>
+  <text class="small" x="25" y="208">mniej niż 1 s mowy → zawsze unknown (za mało, by ocenić głos)</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M510,175 H558"/>
+</svg>
+</div>
+<ul>
+  <li><strong>Wykrywanie mowy:</strong> prosty detektor energii wycina ciszę. Liczy się tylko
+    sama mowa, najwyżej pierwsze 8 sekund.</li>
+  <li><strong>Odcisk głosu:</strong> model <strong>3D-Speaker CAM++</strong> (wersja zh_en
+    „advanced”, licencja Apache-2.0) zamienia mowę na wektor 192 liczb. Opisuje on barwę głosu:
+    wysokość, rezonans, sposób artykulacji. <strong>Nie zależy od treści zdania</strong>, dlatego
+    rozpoznanie działa dla dowolnego polecenia.</li>
+  <li><strong>Wzorzec osoby</strong> to średnia wektorów z jej próbek. Więcej próbek z różnych
+    sytuacji daje stabilniejszy wzorzec.</li>
+  <li><strong>Porównanie</strong> to podobieństwo cosinusowe (kąt między wektorami), zwykle od
+    0 do 1. Decyzję opisuje rozdział <a href="#progi">Wyniki, progi i kalibracja</a>.</li>
+  <li><strong>Bez dodatkowego opóźnienia:</strong> odcisk liczy się równolegle z transkrypcją.
+    Zmierzone na Jetson AGX Orin (CPU, 2 wątki): mediana całego polecenia bez zmian
+    (1329 → 1330 ms), 90. percentyl +95 ms.</li>
+</ul>
+
+<h3>Wybór modelu</h3>
+<p>Przed wyborem porównaliśmy kilka modeli dostępnych w sherpa-onnx. Zestawy testowe: 6 polskich
+głosów Pipera × 12 zdań oraz nagrania 3 osób z przykładów sherpa-onnx. Dokładność liczona metodą
+„zostaw jedno nagranie”. EER (equal error rate) to punkt, w którym fałszywe akceptacje równają się
+fałszywym odrzuceniom – im niżej, tym lepiej.</p>
+<div class="table"><table>
+  <tr><th>Model</th><th>Wymiar</th><th>3 s mowy</th><th>Piper: dokładność / EER</th><th>Ludzie: dokładność / EER</th></tr>
+  <tr><td><strong>3D-Speaker CAM++ zh_en „advanced”</strong> (domyślny)</td><td>192</td><td>91 ms</td><td>100% / 0,2%</td><td>100% / 0%</td></tr>
+  <tr><td>NeMo TitaNet-small</td><td>192</td><td>59 ms</td><td>100% / 0,9%</td><td>100% / 0%</td></tr>
+  <tr><td>3D-Speaker ERes2Net (VoxCeleb)</td><td>192</td><td>218 ms</td><td>100% / 1,9%</td><td>100% / 0%</td></tr>
+  <tr><td>WeSpeaker ResNet34-LM</td><td>256</td><td>257 ms</td><td>98,6% / 12,4%</td><td>92,9% / 15,4%</td></tr>
+  <tr><td>3D-Speaker CAM++ (VoxCeleb)</td><td>512</td><td>90 ms</td><td>68,1% / 40,8%</td><td>71,4% / 37,7%</td></tr>
+</table></div>
+<p>Przez cały łańcuch (Piper → wyoming-speaker-id → Whisper) wszystkie wypowiedzi z co najmniej
+1 s mowy zostały przypisane właściwej osobie, z wynikami 0,76–0,92. Inny model można wskazać
+opcją <code>model</code> (nazwa modelu sherpa-onnx albo ścieżka do pliku <code>.onnx</code>);
+po zmianie modelu wzorce trzeba nagrać od nowa.</p>
+
+<h2 id="wymagania">4. Wymagania</h2>
+<ul>
+  <li>Home Assistant z Assistem i co najmniej jedną satelitą głosową.</li>
+  <li>Serwer zamiany mowy na tekst w protokole Wyoming: dodatek Whisper albo własny
+    faster-whisper (np. na komputerze z GPU). Assist Speaker ID go <strong>nie zastępuje</strong>,
+    tylko staje przed nim.</li>
+  <li>Dla usługi: procesor amd64 albo aarch64 (np. Raspberry Pi 4/5, NUC, Jetson). Model zajmuje
+    ok. 30 MB i działa na CPU; GPU nie jest potrzebne.</li>
+  <li>HACS do instalacji integracji.</li>
+</ul>
+<p class="tip"><strong>Sprawdzone w praktyce:</strong> u autora usługa działa na co dzień na
+<strong>NVIDIA Jetson AGX Orin 64 GB</strong>, jako kontener obok faster-whisper (Whisper na GPU,
+model głosu na CPU), dla całej rodziny i 7 satelit. Działa bardzo dobrze: rozpoznanie trwa ok. 90 ms
+i liczy się w tle transkrypcji, więc polecenia nie są wolniejsze niż z samym Whisperem.</p>
+
+<h2 id="instalacja">5. Instalacja</h2>
+<h3>Krok 1a: usługa jako dodatek HA</h3>
+<p>Najprostsza droga, gdy Home Assistant działa jako HA OS albo Supervised.</p>
+<ol>
+  <li>Ustawienia → Dodatki → Sklep z dodatkami → ⋮ → Repozytoria i dodaj
+    <code>https://github.com/witold-gren/home-assistant-assist-speaker-id</code>.</li>
+  <li>Zainstaluj <strong>Assist Speaker ID (rozpoznawanie mówcy)</strong>.</li>
+  <li>W zakładce Konfiguracja ustaw <strong>upstream</strong> (serwer zamiany mowy na tekst):
+    <code>tcp://core-whisper:10300</code> dla dodatku Whisper albo adres własnego serwera, np.
+    <code>tcp://192.168.1.10:10300</code>.</li>
+  <li>Uruchom dodatek. Za pierwszym razem pobierze model (ok. 30 MB). Potem sam zgłosi się
+    Home Assistantowi z losowym tokenem API, a HA zaproponuje integrację (krok 2).</li>
+</ol>
+<div class="table"><table>
+  <tr><th>Opcja dodatku</th><th>Domyślnie</th><th>Znaczenie</th></tr>
+  <tr><td><code>upstream</code></td><td><code>tcp://core-whisper:10300</code></td><td>serwer Wyoming zamiany mowy na tekst</td></tr>
+  <tr><td><code>threshold</code> / <code>margin</code></td><td>0,5 / 0,05</td><td>wspólny próg i przewaga nad drugą osobą (wartości startowe)</td></tr>
+  <tr><td><code>min_speech</code> / <code>max_speech</code></td><td>1,0 / 8,0 s</td><td>krótsza mowa daje „nieznany”; ile mowy liczyć</td></tr>
+  <tr><td><code>threads</code></td><td>2</td><td>wątki CPU modelu</td></tr>
+  <tr><td><code>model</code></td><td>CAM++ zh_en</td><td>inny model sherpa-onnx (nazwa albo ścieżka)</td></tr>
+  <tr><td><code>api_token</code></td><td>losowy</td><td>własny token API (zwykle niepotrzebny)</td></tr>
+  <tr><td><code>debug</code></td><td>wyłączone</td><td>szczegółowy dziennik</td></tr>
+</table></div>
+
+<h3>Krok 1b: usługa jako kontener (np. obok Whispera na innym komputerze)</h3>
+<p>Gdy Whisper działa na osobnej maszynie, najlepiej postawić usługę obok niego. Dźwięk nie
+przechodzi wtedy dwa razy przez sieć.</p>
+<pre><code>git clone https://github.com/witold-gren/home-assistant-assist-speaker-id
+docker build -t wyoming-speaker-id home-assistant-assist-speaker-id/speaker_id/
+docker run -d --name speaker-id --restart unless-stopped \
+  -p 10350:10350 -p 10351:10351 -v speaker-id-data:/data \
+  -e SPEAKER_ID_UPSTREAM=tcp://192.168.1.10:10300 \
+  -e SPEAKER_ID_API_TOKEN=dlugi-losowy-token \
+  wyoming-speaker-id</code></pre>
+<p>Ten sam kontener w <code>docker-compose.yaml</code>, obok Whispera:</p>
+<pre><code>services:
+  whisper:
+    image: rhasspy/wyoming-whisper
+    # … Twoja dotychczasowa konfiguracja
+  speaker-id:
+    build: ./home-assistant-assist-speaker-id/speaker_id
+    restart: unless-stopped
+    ports: ["10350:10350", "10351:10351"]
+    volumes: ["./speaker-id/data:/data"]
+    environment:
+      SPEAKER_ID_UPSTREAM: tcp://whisper:10300
+      SPEAKER_ID_API_TOKEN: dlugi-losowy-token</code></pre>
+<div class="table"><table>
+  <tr><th>Zmienna</th><th>Domyślnie</th><th>Znaczenie</th></tr>
+  <tr><td><code>SPEAKER_ID_UPSTREAM</code></td><td>(wymagana)</td><td>serwer Wyoming zamiany mowy na tekst</td></tr>
+  <tr><td><code>SPEAKER_ID_THRESHOLD</code> / <code>SPEAKER_ID_MARGIN</code></td><td>0.5 / 0.05</td><td>wspólny próg i margines</td></tr>
+  <tr><td><code>SPEAKER_ID_MIN_SPEECH</code> / <code>SPEAKER_ID_MAX_SPEECH</code></td><td>1.0 / 8.0</td><td>minimum mowy i ile mowy liczyć (sekundy)</td></tr>
+  <tr><td><code>SPEAKER_ID_MODEL</code></td><td>CAM++ zh_en</td><td>nazwa modelu sherpa-onnx albo ścieżka</td></tr>
+  <tr><td><code>SPEAKER_ID_API_TOKEN</code></td><td>brak</td><td>token API HTTP; bez niego trzymaj port 10351 wyłącznie w sieci domowej</td></tr>
+  <tr><td><code>SPEAKER_ID_THREADS</code>, <code>SPEAKER_ID_DEBUG</code></td><td>2, 0</td><td>wątki modelu, szczegółowy dziennik</td></tr>
+</table></div>
+<p>Port <strong>10350</strong> to Wyoming (zamiana mowy na tekst z mówcą), port
+<strong>10351</strong> to API HTTP (wzorce, kalibracja, ostatnie nagranie).</p>
+
+<h3>Krok 2: integracja</h3>
+<ol>
+  <li>HACS → ⋮ → Repozytoria niestandardowe → dodaj adres repozytorium, typ
+    <strong>Integracja</strong>. Zainstaluj <strong>Assist Speaker ID</strong> i zrestartuj HA.</li>
+  <li>Z dodatkiem: HA sam pokaże wykrytą integrację w Ustawienia → Urządzenia i usługi. Kliknij
+    Konfiguruj.</li>
+  <li>Z kontenerem: Ustawienia → Urządzenia i usługi → Dodaj integrację → <strong>Assist Speaker
+    ID</strong> i podaj host, port Wyoming (10350), port API (10351) i token.</li>
+</ol>
+<p>Integracja tworzy urządzenie „Assist Speaker ID” z encją zamiany mowy na tekst
+<strong>„Mowa na tekst z mówcą”</strong>, agentem <strong>„Agent z mówcą”</strong> i sensorem
+<strong>„Ostatni mówca”</strong>.</p>
+<p>Opcje integracji (Konfiguruj) to menu z dwiema pozycjami:</p>
+<ul>
+  <li><strong>Agent i osoby:</strong> przypisanie każdego głosu do osoby HA (<code>person.*</code>),
+    agent docelowy dla „Agenta z mówcą”, linia promptu (domyślnie <code>Pyta: {name}.</code>) i
+    czy wykonywać polecenia jako użytkownik HA mówcy (<code>context.user_id</code>).</li>
+  <li><strong>Progi rozpoznawania:</strong> próg wspólny, margines, minimum mowy i próg każdej
+    osoby. Zapis trafia do usługi i działa od następnego zdania, bez restartu.</li>
+</ul>
+
+<h2 id="pipeline">6. Ustawienie pipeline'u</h2>
+<p>Ustawienia → Asystenci głosowi → wybierz pipeline (asystenta) każdej satelity:</p>
+<ol>
+  <li><strong>Zamiana mowy na tekst:</strong> „Mowa na tekst z mówcą”. Język ustaw taki jak
+    dotąd w Whisperze.</li>
+  <li><strong>Agent konwersacji:</strong>
+    <ul>
+      <li>Assist Router albo inny agent, który sam czyta mówcę, <em>albo</em></li>
+      <li>„Agent z mówcą”, który dopisze mówcę dowolnemu agentowi (wybranemu w opcjach
+        integracji).</li>
+    </ul></li>
+  <li><strong>Wyłącz „Preferuj obsługę poleceń lokalnie”</strong> (<em>Prefer handling commands
+    locally</em>).</li>
+</ol>
+<p class="warn"><strong>Dlaczego wyłączyć obsługę lokalną?</strong> Gdy jest włączona, HA
+najpierw próbuje własnych intencji, zanim zapyta agenta. Wtedy wbudowana intencja rozgłaszania
+złapie „Ogłoszenie, …” i przeczyta tekst syntezą zamiast Twojego nagrania, a podczas nagrywania
+wzorców agent nie zdąży odpowiedzieć krótkim „Nagrano 3 z 10”. Assist Router i „Agent z mówcą”
+i tak przekazują HA wszystko, co HA rozumie, więc zwykłe polecenia działają dalej.</p>
+<p class="tip">Przełączaj satelity po jednej. Gdyby coś nie działało, wystarczy w pipeline'ie
+wrócić do zwykłego Whispera.</p>
+<p>Sprawdzenie: Ustawienia → Asystenci głosowi → pipeline → ⋮ → Debugowanie. Po poleceniu ze
+satelity sensor „Ostatni mówca” pokazuje <code>unknown</code> (nie ma jeszcze wzorców), a atrybut
+<code>speech_seconds</code> długość mowy. To znak, że dźwięk przechodzi przez usługę.</p>
+
+<h2 id="wzorce">7. Nagrywanie wzorców głosu</h2>
+<p>Każdy domownik nagrywa 10–15 zwykłych zdań. Najwygodniej robi to <strong>nagrywanie
+prowadzone</strong>: satelita sama prosi o kolejne zdania, bez słowa wybudzającego.</p>
+<ol>
+  <li>Narzędzia deweloperskie → Akcje → <code>speaker_id.start_enrollment</code>:
+<pre><code>action: speaker_id.start_enrollment
+data:
+  speaker: anna            # id osoby: małe litery, bez spacji
+  name: Anna               # nazwa wypowiadana i wyświetlana
+  count: 10
+  satellite: assist_satellite.salon   # satelita, przy której stoi Anna</code></pre></li>
+  <li>Satelita mówi: „Nagrywam wzorzec głosu: Anna. Powiedz zwykłe polecenie, na przykład: jaka będzie
+    jutro pogoda.” i słucha.</li>
+  <li>Anna mówi dowolne zdanie, np. „Jaka będzie jutro pogoda w Krakowie?”. Polecenie
+    <strong>nie jest wykonywane</strong>; satelita od razu odpowiada „Nagrano 1 z 10. Kolejne
+    zdanie.” i słucha dalej.</li>
+  <li>Za krótkie zdanie (poniżej 1,5 s mowy) nie liczy się – satelita poprosi o dłuższe. Po
+    ciszy albo urwanej rozmowie sama zapyta ponownie, a po 3 próbach bez nowej próbki zakończy.</li>
+  <li>Po ostatniej próbce: „Gotowe, nagrano 10 próbek głosu: Anna.”. Wzorzec działa od razu.</li>
+</ol>
+<p>Bez pola <code>satellite</code> nagrywanie też działa, ale każde zdanie zaczyna się od słowa
+wybudzającego. Postęp widać w atrybucie <code>enrollment</code> sensora „Ostatni mówca”. Przerwanie:
+<code>speaker_id.stop_enrollment</code>.</p>
+<p><strong>Nieudane nagrywanie?</strong> Dograj próbki tą samą akcją (nowe dochodzą do starych)
+albo zacznij od zera: <code>speaker_id.delete_speaker</code> i nagrywanie jeszcze raz. Pojedyncze
+zdanie dodasz po fakcie akcją <code>speaker_id.add_last_sample</code>: ostatnia wypowiedź (najwyżej
+sprzed 10 min) staje się próbką wskazanej osoby.</p>
+<p class="tip"><strong>Dobre próbki:</strong> nagrywaj przez tę satelitę i z tej odległości, z
+której domownik zwykle mówi – mikrofon i pomieszczenie zmieniają głos bardziej niż słowa. Używaj
+zwykłych poleceń po kilka słów, zwykłym tonem (krzyk, szept i śmiech zaniżają wyniki). Nagraj
+<strong>wszystkich</strong> domowników, zanim zaczniesz kalibrować. Głosy dzieci zmieniają się z
+wiekiem, więc co kilka miesięcy dograj im nowe próbki.</p>
+
+<h2 id="progi">8. Wyniki, progi i kalibracja</h2>
+<h3>Podobieństwo</h3>
+<p>Każda wypowiedź jest porównywana z wzorcem każdej osoby. Wynik to <strong>podobieństwo</strong>,
+zwykle od 0 do 1 (w odpowiedzi na „Kto to mówi?” podawane w procentach):</p>
+<div class="table"><table>
+  <tr><th>Podobieństwo</th><th>Co zwykle oznacza (CAM++, mikrofon satelity)</th></tr>
+  <tr><td>0,75–0,95</td><td>ta sama osoba, dobre warunki</td></tr>
+  <tr><td>0,55–0,75</td><td>ta sama osoba, ale krótko, z daleka, w hałasie albo innym tonem</td></tr>
+  <tr><td>0,35–0,55</td><td>podobny głos, często rodzeństwo albo rodzic i dziecko tej samej płci</td></tr>
+  <tr><td>0–0,35</td><td>inna osoba</td></tr>
+</table></div>
+<p>To nie jest „unikatowość” głosu. Wysoki wynik oznacza tylko, że <em>ta wypowiedź</em> jest bardzo
+podobna do <em>tego wzorca</em>.</p>
+
+<h3>Próg i margines</h3>
+<p>Najlepiej pasująca osoba zostaje rozpoznana tylko wtedy, gdy spełnia <strong>oba</strong>
+warunki:</p>
+<ol>
+  <li><strong>podobieństwo ≥ próg tej osoby</strong> (jej własny albo wspólny, gdy własnego nie ma);</li>
+  <li><strong>podobieństwo − wynik drugiej osoby ≥ margines.</strong> Przy dwóch prawie równych
+    wynikach lepiej powiedzieć „nie wiem”, niż zgadywać.</li>
+</ol>
+<p>Inaczej mówca jest „nieznany” (<code>unknown</code>), a Assist działa tak, jakby rozpoznawania
+nie było. Pomyłka jest gorsza niż brak rozpoznania, więc domyślnie system jest ostrożny.</p>
+<div class="flow">
+<svg viewBox="0 0 900 230" role="img" aria-label="Oś podobieństwa: własne próbki osoby po prawej, cudze po lewej, próg pośrodku przerwy, przykład marginesu">
+  <line class="axis" x1="40" y1="120" x2="860" y2="120"/>
+  <text class="small" x="40" y="142" text-anchor="middle">0</text>
+  <text class="small" x="245" y="142" text-anchor="middle">0,25</text>
+  <text class="small" x="450" y="142" text-anchor="middle">0,50</text>
+  <text class="small" x="655" y="142" text-anchor="middle">0,75</text>
+  <text class="small" x="860" y="142" text-anchor="middle">1</text>
+  <circle class="other" cx="122" cy="104" r="6"/><circle class="other" cx="155" cy="96" r="6"/>
+  <circle class="other" cx="180" cy="106" r="6"/><circle class="other" cx="212" cy="98" r="6"/>
+  <circle class="other" cx="240" cy="104" r="6"/><circle class="other" cx="270" cy="94" r="6"/>
+  <circle class="other" cx="290" cy="106" r="6"/>
+  <circle class="own" cx="621" cy="104" r="6"/><circle class="own" cx="678" cy="96" r="6"/>
+  <circle class="own" cx="694" cy="106" r="6"/><circle class="own" cx="710" cy="94" r="6"/>
+  <circle class="own" cx="725" cy="104" r="6"/><circle class="own" cx="740" cy="96" r="6"/>
+  <circle class="own" cx="760" cy="106" r="6"/><circle class="own" cx="785" cy="98" r="6"/>
+  <text x="200" y="70" text-anchor="middle">cudze próbki</text>
+  <text class="small" x="290" y="84" text-anchor="middle">others_max 0,31</text>
+  <text x="700" y="70" text-anchor="middle">próbki Tomka</text>
+  <text class="small" x="621" y="84" text-anchor="middle">own_min 0,71</text>
+  <line class="dash" x1="290" y1="88" x2="290" y2="120"/>
+  <line class="dash" x1="621" y1="88" x2="621" y2="120"/>
+  <line class="mark" x1="483" y1="40" x2="483" y2="128"/>
+  <text x="483" y="32" text-anchor="middle">próg 0,54</text>
+  <text class="small" x="455" y="104" text-anchor="middle">przerwa = zapas</text>
+  <rect class="okbox" x="40" y="168" width="400" height="48" rx="8"/>
+  <text x="56" y="188">Tomek 0,82, Anna 0,30 → Tomek</text>
+  <text class="small" x="56" y="205">0,82 ≥ 0,54 i przewaga 0,52 ≥ margines 0,05</text>
+  <rect class="badbox" x="460" y="168" width="400" height="48" rx="8"/>
+  <text x="476" y="188">Kasia 0,62, Jan 0,59 → unknown</text>
+  <text class="small" x="476" y="205">próg spełniony, ale przewaga 0,03 &lt; margines 0,05</text>
+</svg>
+</div>
+<ul>
+  <li><strong>Wyższy próg</strong> jest ostrzejszy: mniej pomyłek, ale częściej „nieznany”.</li>
+  <li><strong>Niższy próg</strong> jest łagodniejszy: rzadziej „nieznany”, ale łatwiej o pomyłkę.</li>
+  <li><strong>Podobne głosy</strong> (rodzeństwo) potrzebują <strong>wyższego</strong> progu albo
+    większego marginesu. Nie dlatego, że ich wzorzec jest słabszy, tylko dlatego, że cudze głosy
+    zbliżają się do niego – poprzeczka musi być wyżej, by rodzeństwo jej nie przeskoczyło.</li>
+</ul>
+<div class="table"><table>
+  <tr><th>Parametr</th><th>Domyślnie</th><th>Gdzie zmienić</th></tr>
+  <tr><td>Próg wspólny</td><td>0,50</td><td>opcje integracji → Progi rozpoznawania</td></tr>
+  <tr><td>Próg osoby</td><td>brak = wspólny</td><td>opcje integracji, akcja <code>speaker_id.set_speaker</code>, kalibracja z <code>apply: true</code></td></tr>
+  <tr><td>Margines</td><td>0,05</td><td>opcje integracji</td></tr>
+  <tr><td>Minimum mowy</td><td>1,0 s</td><td>opcje integracji; krótsza wypowiedź = zawsze „nieznany”</td></tr>
+</table></div>
+<p>Wartości z opcji integracji są zapisane w usłudze (<code>speakers.json</code>) i mają
+pierwszeństwo przed opcjami dodatku i zmiennymi środowiska. Te są tylko wartościami startowymi.</p>
+
+<h3>Kalibracja</h3>
+<p>Akcja <code>speaker_id.calibrate</code> porównuje próbki każdej osoby z jej wzorcem i z próbkami
+pozostałych osób, a potem proponuje próg. Z <code>apply: true</code> od razu zapisuje progi
+osób.</p>
+<div class="table"><table>
+  <tr><th>Pole raportu</th><th>Znaczenie</th></tr>
+  <tr><td><code>samples</code></td><td>liczba próbek</td></tr>
+  <tr><td><code>own_min</code></td><td><strong>najgorsza</strong> własna próbka: podobieństwo do wzorca z <em>pozostałych</em> próbek tej osoby</td></tr>
+  <tr><td><code>own_p10</code></td><td>10. percentyl: 9 na 10 własnych próbek jest co najmniej tak podobnych</td></tr>
+  <tr><td><code>own_mean</code></td><td>średnie podobieństwo własnych próbek</td></tr>
+  <tr><td><code>others_max</code></td><td><strong>najbardziej podobna cudza</strong> próbka</td></tr>
+  <tr><td><code>separable</code></td><td><code>true</code>, gdy <code>own_min &gt; others_max</code>: żadna cudza próbka nie zbliżyła się do najgorszej własnej</td></tr>
+  <tr><td><code>suggested_threshold</code></td><td>środek między <code>own_p10</code> a <code>others_max</code> (w zakresie 0,2–0,9)</td></tr>
+</table></div>
+<p><strong>Przykład (Tomek, dorosły):</strong></p>
+<pre><code>samples: 10
+own_min: 0.709      # najgorsza własna próbka: 71% podobieństwa do wzorca
+own_p10: 0.778      # 9 z 10 własnych próbek ma co najmniej 78%
+own_mean: 0.803     # średnio 80%
+others_max: 0.305   # najbardziej podobna cudza próbka: tylko 31%
+separable: true     # 0.709 > 0.305 - głosy wyraźnie rozdzielone
+suggested_threshold: 0.541   # (0.778 + 0.305) / 2</code></pre>
+<p>Między najgorszą własną próbką (71%) a najbliższą cudzą (31%) jest 40 punktów przerwy. Każdy
+próg w przedziale ok. 0,35–0,70 zadziała, a proponowane 0,54 leży pośrodku z zapasem w obie strony.
+U dziecka może wyjść np. <code>own_p10: 0.74</code> i <code>others_max: 0.68</code> (rodzeństwo):
+próg 0,71 i tylko 6 punktów przerwy. Wtedy warto też podnieść margines.</p>
+
+<h3>Podobne głosy (np. rodzeństwo)</h3>
+<ol>
+  <li>Nagraj więcej próbek: 15–20 na osobę, z typowej satelity i odległości.</li>
+  <li>Kalibruj dopiero po nagraniu wszystkich: <code>others_max</code> liczy się tylko z osób, które
+    mają wzorce.</li>
+  <li>Przy <code>separable: false</code> często winna jest jedna nieudana próbka (ktoś się wtrącił,
+    hałas). Dograj próbki albo nagraj tę osobę od nowa.</li>
+  <li>Próg ustaw między <code>others_max</code> a <code>own_p10</code>: bliżej
+    <code>own_p10</code> to mniej pomyłek, bliżej <code>others_max</code> – mniej „nieznanych”.</li>
+  <li>Margines 0,08–0,15: asystent powie „nie jestem pewien”, zamiast zgadywać.</li>
+  <li>Sprawdź „Kto to mówi?” na kilku dłuższych zdaniach każdej osoby i patrz na wynik „następnej
+    osoby” – przerwa między nimi to Twój faktyczny zapas.</li>
+</ol>
+<p class="note">Kalibracja z <code>apply: true</code> nadpisuje progi osób. Ręczne poprawki rób
+po niej.</p>
+
+<h2 id="uzycie">9. Korzystanie na co dzień</h2>
+<h3>„Kto to mówi?”</h3>
+<p>Z Assist Routerem zapytaj „Kto to mówi?”, „Kim jestem?”, „Czy mnie rozpoznajesz?” albo „Czyj to głos?”.
+Odpowiedź podaje osobę i podobieństwo, np. „Mówi Anna, podobieństwo 82%. Następna osoba: Kasia, 41%.”.
+To najszybszy test progów i jakości wzorców.</p>
+
+<h3>„Agent z mówcą”: mówca dla dowolnego agenta</h3>
+<p>Ustaw go w pipeline'ie, a w opcjach integracji wybierz agenta docelowego (np. Ollama, OpenAI,
+wbudowany agent HA). Przed przekazaniem polecenia „Agent z mówcą”:</p>
+<ul>
+  <li>dopisuje do promptu systemowego linię z mówcą (domyślnie „Pyta: Anna.”), więc agent LLM
+    może odpowiedzieć „Anno, masz dziś…”;</li>
+  <li>opcjonalnie ustawia <code>context.user_id</code> na użytkownika HA mówcy, więc w historii
+    widać, kto przełączył światło;</li>
+  <li>obsługuje nagrywanie wzorców: podczas nagrywania nie wykonuje poleceń i odpowiada od razu.</li>
+</ul>
+
+<h3>Własny agent albo integracja: <code>get_speaker()</code></h3>
+<pre><code>try:
+    from custom_components.speaker_id.api import get_speaker
+except ImportError:
+    get_speaker = None
+
+speaker = get_speaker(hass) if get_speaker else None
+if speaker and speaker.speaker:
+    ...  # speaker.speaker (id), .name, .person, .user_id, .score</code></pre>
+<p>Agent, który sam obsługuje nagrywanie, wywołuje na początku <code>enrollment_reply(hass)</code>:
+zwraca krótką odpowiedź („Nagrano 3 z 10. Kolejne zdanie.”) i informację, czy słuchać dalej, albo
+<code>None</code> dla zwykłej wypowiedzi. Tak robi Assist Router: pytanie w pierwszej osobie bez
+imienia („jakie <strong>mam</strong> zajęcia”) dotyczy danych mówcy, „tu” to pokój mówcy, a „mój
+brat” to konkretna osoba z rodziny.</p>
+
+<h3>Automatyzacje</h3>
+<p>Sensor <strong>„Ostatni mówca”</strong> (stan: imię albo <code>unknown</code>; atrybuty:
+<code>speaker</code>, <code>name</code>, <code>person</code>, <code>score</code>,
+<code>scores</code>, <code>speech_seconds</code>, <code>enrollment</code>) i zdarzenie
+<code>speaker_id_identified</code>. Treść wypowiedzi celowo nie trafia do historii.</p>
+<p>Automatyzacje z wyzwalaczem zdaniowym HA uruchamia przed agentem, więc nie dostają mówcy wprost.
+Sensor zmienia się jednak w tym samym poleceniu, tuż przed nimi – wynik sprzed kilku sekund to
+mówca tego zdania. Wygodne makro w <code>/config/custom_templates/mowca.jinja</code>:</p>
+<pre><code>{% macro mowca(max_s=20) -%}
+  {%- set s = states.sensor.assist_speaker_id_ostatni_mowca -%}
+  {%- if s and (now() - s.last_updated).total_seconds() &lt;= max_s -%}
+    {{- s.attributes.speaker or '' -}}
+  {%- endif -%}
+{%- endmacro %}</code></pre>
+<p>Po utworzeniu pliku uruchom akcję <code>homeassistant.reload_custom_templates</code>. Przykład:
+„Gdzie jest mój telefon?” dzwoni na telefon osoby, która pyta:</p>
+<pre><code>triggers:
+  - trigger: conversation
+    command: "gdzie jest mój telefon"
+actions:
+  - variables:
+      kto: "{% from 'mowca.jinja' import mowca %}{{ mowca() }}"
+  - if: "{{ kto in ['anna', 'tomek'] }}"
+    then:
+      - action: script.zadzwon_na_telefon     # Twój skrypt, np. dzwonek przez aplikację HA
+        data: { osoba: "{{ kto }}" }
+      - set_conversation_response: "Dzwonię na Twój telefon."
+    else:
+      - set_conversation_response: "Nie wiem, kto pyta. Czyj telefon mam znaleźć?"</code></pre>
+<p>Nazwa sensora zależy od języka HA; po angielsku to
+<code>sensor.assist_speaker_id_last_speaker</code>.</p>
+
+<h2 id="ogloszenia">10. Ogłoszenia Twoim głosem</h2>
+<p>„OK Nabu, <strong>ogłoszenie</strong>, dzieci, proszę przyjść na obiad.” Pozostałe głośniki
+odtwarzają <strong>Twoje nagranie</strong> – dokładnie to, co powiedziałeś po słowie wybudzającym –
+zamiast czytać tekst syntezą mowy. Słychać, kto woła i jakim tonem.</p>
+<ul>
+  <li>Nagranie to ostatnia wypowiedź z usługi, trzymana tylko w pamięci RAM.</li>
+  <li>HA podaje je głośnikom pod jednorazowym, podpisanym adresem
+    <code>/api/speaker_id/announcement/&lt;token&gt;</code>, ważnym 10 minut. Nic nie trafia na dysk.</li>
+  <li>Assist Router rozpoznaje „ogłoszenie”, „komunikat”, „do wszystkich” i „intercom” na początku
+    zdania. Głośnik, który nagrał, odpowiada tylko „Ogłoszenie wysłane.”.</li>
+  <li>Bez Assist Routera użyj akcji <code>speaker_id.announce_last</code> w automatyzacji:</li>
+</ul>
+<div class="table"><table>
+  <tr><th>Pole</th><th>Domyślnie</th><th>Znaczenie</th></tr>
+  <tr><td><code>satellites</code></td><td>wszystkie satelity z ogłoszeniami</td><td>gdzie zagrać</td></tr>
+  <tr><td><code>exclude</code></td><td>brak</td><td>pominięta satelita, zwykle ta, która nagrała</td></tr>
+  <tr><td><code>media_players</code></td><td>brak</td><td>dodatkowe odtwarzacze, np. głośniki przez Music Assistant (<code>play_media</code> z <code>announce: true</code>)</td></tr>
+  <tr><td><code>preannounce</code></td><td><code>true</code></td><td>krótki sygnał przed nagraniem</td></tr>
+  <tr><td><code>prefer_players</code></td><td><code>false</code></td><td>jeden głośnik w pokoju: dostępny odtwarzacz (np. HomePod) zamiast satelity; <code>off</code> liczy się jako niedostępny; pokój, z którego pada ogłoszenie, nic nie dostaje</td></tr>
+  <tr><td><code>max_age</code></td><td>60 s</td><td>starsza wypowiedź nie jest ogłaszana</td></tr>
+</table></div>
+<p>Agent konwersacji może wywołać to samo funkcją
+<code>async_announce_last(hass, exclude=…, media_players=…)</code> z
+<code>custom_components.speaker_id.api</code>. Pamiętaj o wyłączeniu obsługi lokalnej w pipeline'ie
+(rozdział <a href="#pipeline">6</a>).</p>
+
+<h2 id="akcje">11. Akcje i API</h2>
+<div class="table"><table>
+  <tr><th>Akcja</th><th>Co robi</th></tr>
+  <tr><td><code>speaker_id.start_enrollment</code></td><td>nagrywanie wzorca: <code>speaker</code>, <code>name</code>, <code>count</code>, opcjonalnie <code>satellite</code> (nagrywanie prowadzone)</td></tr>
+  <tr><td><code>speaker_id.stop_enrollment</code></td><td>przerywa nagrywanie</td></tr>
+  <tr><td><code>speaker_id.add_last_sample</code></td><td>ostatnia wypowiedź (najwyżej sprzed 10 min) jako próbka osoby</td></tr>
+  <tr><td><code>speaker_id.calibrate</code></td><td>raport kalibracji i propozycje progów; <code>apply: true</code> zapisuje progi</td></tr>
+  <tr><td><code>speaker_id.set_speaker</code></td><td>zmiana nazwy i własnego progu osoby</td></tr>
+  <tr><td><code>speaker_id.delete_speaker</code></td><td>usuwa wzorzec osoby</td></tr>
+  <tr><td><code>speaker_id.list_speakers</code></td><td>lista osób z liczbą próbek i progami</td></tr>
+  <tr><td><code>speaker_id.announce_last</code></td><td>odtwarza ostatnią wypowiedź jako ogłoszenie</td></tr>
+</table></div>
+<p>Usługa ma też API HTTP (port 10351, nagłówek <code>Authorization: Bearer &lt;token&gt;</code>),
+przydatne do skryptów i testów:</p>
+<div class="table"><table>
+  <tr><th>Zapytanie</th><th>Co robi</th></tr>
+  <tr><td><code>GET /api/info</code>, <code>GET/PUT /api/settings</code></td><td>wersja i model; progi, margines, minimum mowy</td></tr>
+  <tr><td><code>GET /api/speakers</code>, <code>PUT/DELETE /api/speakers/{id}</code></td><td>lista osób; zmiana albo usunięcie osoby</td></tr>
+  <tr><td><code>POST /api/speakers/{id}/samples</code></td><td>próbka z pliku WAV</td></tr>
+  <tr><td><code>POST /api/speakers/{id}/samples/last</code>, <code>DELETE …/samples/{n}</code></td><td>ostatnia wypowiedź jako próbka; usunięcie próbki</td></tr>
+  <tr><td><code>POST/DELETE /api/enrollment</code></td><td>start i koniec nagrywania wzorca</td></tr>
+  <tr><td><code>GET /api/last</code>, <code>GET /api/last.wav</code></td><td>wynik i nagranie ostatniej wypowiedzi (z RAM)</td></tr>
+  <tr><td><code>POST /api/identify</code></td><td>rozpoznanie mówcy z przesłanego pliku WAV</td></tr>
+  <tr><td><code>POST /api/calibrate</code></td><td>raport kalibracji</td></tr>
+</table></div>
+
+<h2 id="ograniczenia">12. Ograniczenia</h2>
+<ul>
+  <li><strong>Krótkie polecenia</strong> („Tak”, „Stop”, poniżej 1 s mowy) dają „nieznany”.</li>
+  <li><strong>Słowo wybudzające nie jest używane:</strong> satelita wykrywa je sama i wysyła tylko
+    polecenie. Rozpoznanie nie zależy więc od treści, ale potrzebuje choć sekundy mowy.</li>
+  <li><strong>Tekst wpisany ręcznie</strong> w aplikacji nie ma mówcy.</li>
+  <li><strong>Kilka osób naraz:</strong> gdy dwie osoby mówią jednocześnie, wynik dotyczy
+    dominującego głosu albo wychodzi „nieznany”.</li>
+  <li><strong>Wbudowane komunikaty</strong> (np. podczas nagrywania wzorców) i słowa kluczowe Assist
+    Routera są po polsku; sama metoda rozpoznania działa dla każdego języka.</li>
+</ul>
+<p class="warn"><strong>To wygoda, nie zabezpieczenie.</strong> Głos można nagrać i odtworzyć, a
+rodzeństwo bywa do siebie bardzo podobne. Nie używaj mówcy do otwierania zamków, wyłączania alarmu
+ani niczego, co wymaga uwierzytelnienia.</p>
+
+<h2 id="prywatnosc">13. Prywatność</h2>
+<p>Wzorzec głosu to dane biometryczne (RODO, art. 9). Dlatego:</p>
+<ul>
+  <li>wszystko działa <strong>lokalnie</strong>, bez chmury;</li>
+  <li>usługa zapisuje <strong>tylko wektory</strong> (<code>/data/speakers.json</code>), bez nagrań
+    (wektor opisuje barwę głosu, ale nie jest nagraniem);</li>
+  <li>ostatnia wypowiedź jest trzymana wyłącznie w pamięci, najwyżej 10 minut (do
+    <code>add_last_sample</code> i ogłoszeń);</li>
+  <li>treść wypowiedzi nie trafia do historii sensora;</li>
+  <li><code>delete_speaker</code> usuwa wzorzec osoby w całości;</li>
+  <li>domownicy, a przy dzieciach rodzice, powinni wiedzieć o rozpoznawaniu i się na nie zgodzić.</li>
+</ul>
+
+<footer>Assist Speaker ID (integracja <code>speaker_id</code>, usługa
+<code>wyoming-speaker-id</code>). Licencja Apache-2.0. Model 3D-Speaker CAM++: Apache-2.0, przez
+<a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a>. Zmiany: <code>CHANGELOG.md</code>.
+Zgłoszenia: Issues w repozytorium na GitHubie.</footer>
+</div>
+</body>
+</html>

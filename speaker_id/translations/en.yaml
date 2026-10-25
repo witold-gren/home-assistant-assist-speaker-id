@@ -1,0 +1,32 @@
+configuration:
+  upstream:
+    name: Speech-to-text server
+    description: >-
+      Wyoming server the audio is forwarded to, e.g. tcp://core-whisper:10300 (Whisper
+      add-on) or tcp://192.168.1.10:10300.
+  threshold:
+    name: Recognition threshold
+    description: >-
+      Start value: minimum voice similarity to a voiceprint (0-1). Later set it in the Speaker
+      ID integration options (Recognition thresholds) - those values take precedence.
+  margin:
+    name: Margin over the runner-up
+    description: How much the best speaker must beat the second one, otherwise "unknown".
+  min_speech:
+    name: Minimum speech [s]
+    description: Shorter utterances are always "unknown" (too little to recognise a voice).
+  max_speech:
+    name: Maximum speech [s]
+    description: How many first seconds of speech are used.
+  threads:
+    name: Threads
+    description: CPU threads for the voice model.
+  model:
+    name: Voice model
+    description: A sherpa-onnx model file (empty = the built-in CAM++).
+  api_token:
+    name: API token
+    description: Empty = a random token the add-on passes to the integration itself.
+  debug:
+    name: Verbose log
+    description: Timings and scores of every utterance in the add-on log.

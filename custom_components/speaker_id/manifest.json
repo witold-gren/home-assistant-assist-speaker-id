@@ -1,0 +1,24 @@
+{
+  "domain": "speaker_id",
+  "name": "Assist Speaker ID",
+  "after_dependencies": [
+    "assist_satellite",
+    "media_player"
+  ],
+  "codeowners": [
+    "@witold-gren"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "conversation",
+    "http"
+  ],
+  "documentation": "https://witold-gren.github.io/home-assistant-assist-speaker-id/",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/witold-gren/home-assistant-assist-speaker-id/issues",
+  "requirements": [
+    "wyoming>=1.5.4"
+  ],
+  "version": "0.1.0"
+}

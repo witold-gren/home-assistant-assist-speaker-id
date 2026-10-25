@@ -1,0 +1,39 @@
+name: Assist Speaker ID
+version: "0.1.0"
+slug: speaker_id
+description: >-
+  Speech to text through your Wyoming server (e.g. Whisper) with recognition of who is
+  speaking - for the Assist Speaker ID integration.
+url: https://github.com/witold-gren/home-assistant-assist-speaker-id
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+hassio_api: true
+discovery:
+  - speaker_id
+ports:
+  10350/tcp: null
+  10351/tcp: null
+ports_description:
+  10350/tcp: Wyoming (speech to text with speaker) - only inside the HA network by default
+  10351/tcp: HTTP API (voiceprints, calibration) - only inside the HA network by default
+options:
+  upstream: tcp://core-whisper:10300
+  threshold: 0.5
+  margin: 0.05
+  min_speech: 1.0
+  max_speech: 8.0
+  threads: 2
+  debug: false
+schema:
+  upstream: match(^tcp://[^:/]+:[0-9]+$)
+  threshold: float(0,1)
+  margin: float(0,0.5)
+  min_speech: float(0.3,5)
+  max_speech: float(2,30)
+  threads: int(1,8)
+  model: str?
+  api_token: password?
+  debug: bool

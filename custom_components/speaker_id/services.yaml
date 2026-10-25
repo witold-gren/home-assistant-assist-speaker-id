@@ -1,0 +1,87 @@
+start_enrollment:
+  fields:
+    speaker:
+      required: true
+      example: anna
+      selector:
+        text:
+    name:
+      example: Anna
+      selector:
+        text:
+    count:
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+    satellite:
+      selector:
+        entity:
+          domain: assist_satellite
+stop_enrollment:
+add_last_sample:
+  fields:
+    speaker:
+      required: true
+      selector:
+        text:
+delete_speaker:
+  fields:
+    speaker:
+      required: true
+      selector:
+        text:
+set_speaker:
+  fields:
+    speaker:
+      required: true
+      selector:
+        text:
+    name:
+      selector:
+        text:
+    threshold:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+list_speakers:
+calibrate:
+  fields:
+    apply:
+      default: false
+      selector:
+        boolean:
+announce_last:
+  fields:
+    satellites:
+      selector:
+        entity:
+          domain: assist_satellite
+          multiple: true
+    media_players:
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+    exclude:
+      selector:
+        entity:
+          domain: assist_satellite
+    preannounce:
+      default: true
+      selector:
+        boolean:
+    prefer_players:
+      default: false
+      selector:
+        boolean:
+    max_age:
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 600
+          unit_of_measurement: s

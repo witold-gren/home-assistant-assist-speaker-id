@@ -1,0 +1,4 @@
+# Debian (glibc) instead of the HA base images (Alpine): sherpa-onnx has no musl wheels.
+build_from:
+  amd64: python:3.12-slim-bookworm
+  aarch64: python:3.12-slim-bookworm

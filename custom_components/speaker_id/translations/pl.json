@@ -1,0 +1,211 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Usługa Assist Speaker ID",
+        "description": "wyoming-speaker-id: pośrednik zamiany mowy na tekst Wyoming (przed np. faster-whisper), który rozpoznaje też mówcę.",
+        "data": {
+          "host": "Host",
+          "port": "Port Wyoming",
+          "api_port": "Port API HTTP",
+          "api_token": "Token API (opcjonalnie)"
+        }
+      },
+      "hassio_confirm": {
+        "title": "Dodatek Assist Speaker ID",
+        "description": "Skonfigurować dodatek Assist Speaker ID znaleziony przez Supervisora?"
+      },
+      "reconfigure": {
+        "title": "Usługa Assist Speaker ID",
+        "description": "Zmień adres, porty albo token API usługi. Osoby i agent w opcjach zostają bez zmian.",
+        "data": {
+          "host": "Host",
+          "port": "Port Wyoming",
+          "api_port": "Port API HTTP",
+          "api_token": "Token API (opcjonalnie)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Brak połączenia z usługą (port Wyoming albo API HTTP).",
+      "invalid_auth": "Zły token API.",
+      "no_asr": "Usługa nie zgłasza programu zamiany mowy na tekst - czy serwer nadrzędny (np. Whisper) jest osiągalny?"
+    },
+    "abort": {
+      "already_configured": "Ta usługa jest już skonfigurowana.",
+      "reconfigure_successful": "Zapisano ustawienia usługi."
+    }
+  },
+  "options": {
+    "step": {
+      "people": {
+        "title": "Agent i osoby",
+        "description": "Zapisane głosy (liczba próbek): {speakers}.\n\nPrzypisz każdy głos do osoby w HA (pola z imionami poniżej). Agent „Agent z mówcą” przekazuje polecenia wybranemu agentowi i dopisuje do jego promptu linię z imieniem mówcy - w miejscu {name} pojawi się imię.",
+        "data": {
+          "agent_id": "Agent konwersacji, któremu przekazywać polecenia",
+          "prompt": "Linia dopisywana do promptu systemowego agenta",
+          "set_user": "Wykonuj polecenia jako użytkownik HA mówcy"
+        },
+        "data_description": {
+          "prompt": "Np. „Pyta: {name}.” - tylko dla agenta „Agent z mówcą”. Assist Router czyta mówcę sam.",
+          "set_user": "Polecenie wykonuje się z uprawnieniami użytkownika HA przypisanej osoby."
+        }
+      },
+      "init": {
+        "title": "Assist Speaker ID",
+        "menu_options": {
+          "people": "Agent i osoby",
+          "thresholds": "Progi rozpoznawania"
+        }
+      },
+      "thresholds": {
+        "title": "Progi rozpoznawania",
+        "description": "Wynik rozpoznania to **podobieństwo** wypowiedzi do wzorca głosu danej osoby (0-1, „Kto to mówi?” podaje je w procentach). Osoba jest rozpoznana, gdy podobieństwo jest **nie mniejsze niż jej próg** i wyprzedza drugą osobę o **margines**. Wyższy próg = ostrzej: mniej pomyłek, częściej „nieznany”. Opis i kalibracja: README.\n\nOsoby (próbki · własny próg, — = wspólny):\n{speakers}\n\nPuste pole osoby = próg wspólny. Kalibracja z „apply” nadpisuje progi osób.",
+        "data": {
+          "threshold": "Próg wspólny",
+          "margin": "Margines nad drugą osobą",
+          "min_speech": "Minimum mowy"
+        },
+        "data_description": {
+          "threshold": "Dla osób bez własnego progu. Typowo 0,5-0,7.",
+          "margin": "O ile najlepsza osoba musi wyprzedzać drugą (0,05 = 5 punktów procentowych). Większy przy podobnych głosach, np. rodzeństwa.",
+          "min_speech": "Krótsza wypowiedź to zawsze „nieznany”: za mało mowy, żeby rozpoznać głos."
+        }
+      }
+    },
+    "abort": {
+      "thresholds_saved": "Zapisano w usłudze - działa od następnej wypowiedzi.",
+      "cannot_connect": "Brak połączenia z usługą Assist Speaker ID."
+    },
+    "error": {
+      "cannot_connect": "Brak połączenia z usługą Assist Speaker ID."
+    }
+  },
+  "entity": {
+    "stt": {
+      "stt": {
+        "name": "Mowa na tekst z mówcą"
+      }
+    },
+    "conversation": {
+      "agent": {
+        "name": "Agent z mówcą"
+      }
+    },
+    "sensor": {
+      "last_speaker": {
+        "name": "Ostatni mówca"
+      }
+    }
+  },
+  "services": {
+    "start_enrollment": {
+      "name": "Nagrywanie wzorca",
+      "description": "Kolejne wypowiedzi (z dowolnego satelity) staną się próbkami głosu tej osoby.",
+      "fields": {
+        "speaker": {
+          "name": "Mówca",
+          "description": "Identyfikator: a-z, 0-9, _"
+        },
+        "name": {
+          "name": "Nazwa",
+          "description": "Wyświetlana nazwa"
+        },
+        "count": {
+          "name": "Liczba",
+          "description": "Ile wypowiedzi zapisać"
+        },
+        "satellite": {
+          "name": "Głośnik",
+          "description": "Głośnik sam prosi o kolejne zdania (bez słowa wybudzającego). Puste = mów polecenia jak zwykle, ze słowem wybudzającym."
+        }
+      }
+    },
+    "stop_enrollment": {
+      "name": "Zatrzymaj nagrywanie wzorca",
+      "description": "Kolejne wypowiedzi nie są już zapisywane jako próbki."
+    },
+    "add_last_sample": {
+      "name": "Dodaj ostatnią wypowiedź",
+      "description": "Ostatnia wypowiedź (najwyżej sprzed 10 min) jako próbka tej osoby.",
+      "fields": {
+        "speaker": {
+          "name": "Mówca",
+          "description": "Identyfikator mówcy"
+        }
+      }
+    },
+    "delete_speaker": {
+      "name": "Usuń mówcę",
+      "description": "Zapomina osobę i usuwa wzorzec jej głosu.",
+      "fields": {
+        "speaker": {
+          "name": "Mówca",
+          "description": "Identyfikator mówcy"
+        }
+      }
+    },
+    "set_speaker": {
+      "name": "Ustaw mówcę",
+      "description": "Dodaje albo zmienia nazwę osoby, ustawia jej własny próg.",
+      "fields": {
+        "speaker": {
+          "name": "Mówca",
+          "description": "Identyfikator mówcy"
+        },
+        "name": {
+          "name": "Nazwa",
+          "description": "Wyświetlana nazwa"
+        },
+        "threshold": {
+          "name": "Próg",
+          "description": "Własny próg podobieństwa, puste = wspólny"
+        }
+      }
+    },
+    "list_speakers": {
+      "name": "Lista mówców",
+      "description": "Zapisane osoby z liczbą próbek."
+    },
+    "calibrate": {
+      "name": "Kalibracja",
+      "description": "Porównuje próbki każdej osoby z próbkami pozostałych i proponuje progi.",
+      "fields": {
+        "apply": {
+          "name": "Zastosuj",
+          "description": "Zapisz proponowane progi"
+        }
+      }
+    },
+    "announce_last": {
+      "name": "Ogłoś ostatnią wypowiedź",
+      "description": "Odtwarza ostatnią wypowiedź - nagranie mówcy, bez zmian - na głośnikach (intercom). Domyślnie na wszystkich satelitach poza „exclude”.",
+      "fields": {
+        "satellites": {
+          "name": "Satelity",
+          "description": "Puste = wszystkie, które obsługują ogłoszenia."
+        },
+        "media_players": {
+          "name": "Odtwarzacze",
+          "description": "Dodatkowo, np. HomePody (Music Assistant)."
+        },
+        "exclude": {
+          "name": "Pomiń",
+          "description": "Satelita, który nagrał ogłoszenie."
+        },
+        "preannounce": {
+          "name": "Dźwięk przed",
+          "description": "Krótki sygnał przed nagraniem."
+        },
+        "prefer_players": {
+          "name": "Najpierw odtwarzacze",
+          "description": "Jeden głośnik w pokoju: odtwarzacz (np. HomePod), gdy dostępny, inaczej satelita. Pokój, z którego pada ogłoszenie, nic nie dostaje."
+        },
+        "max_age": {
+          "name": "Maksymalny wiek nagrania",
+          "description": "Starsza ostatnia wypowiedź nie jest ogłaszana."
+        }
+      }
+    }
+  }
+}

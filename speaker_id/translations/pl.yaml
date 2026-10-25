@@ -1,0 +1,32 @@
+configuration:
+  upstream:
+    name: Serwer zamiany mowy na tekst
+    description: >-
+      Serwer Wyoming, któremu przekazywany jest dźwięk, np. tcp://core-whisper:10300
+      (dodatek Whisper) albo tcp://192.168.1.10:10300.
+  threshold:
+    name: Próg rozpoznania
+    description: >-
+      Wartość startowa: minimalne podobieństwo głosu do wzorca (0-1). Potem ustawiasz go w
+      opcjach integracji Assist Speaker ID (Progi rozpoznawania) - tamte wartości mają pierwszeństwo.
+  margin:
+    name: Przewaga nad drugą osobą
+    description: O ile wynik najlepszej osoby musi przewyższać drugą, inaczej „nieznany”.
+  min_speech:
+    name: Minimum mowy [s]
+    description: Krótsza wypowiedź to zawsze „nieznany” (za mało, żeby rozpoznać głos).
+  max_speech:
+    name: Maksimum mowy [s]
+    description: Ile pierwszych sekund mowy służy do rozpoznania.
+  threads:
+    name: Wątki
+    description: Liczba wątków procesora dla modelu głosu.
+  model:
+    name: Model głosu
+    description: Plik modelu sherpa-onnx (puste = wbudowany CAM++).
+  api_token:
+    name: Token API
+    description: Puste = losowy token, który dodatek sam przekazuje integracji.
+  debug:
+    name: Szczegółowy dziennik
+    description: Czasy liczenia i wyniki każdej wypowiedzi w dzienniku dodatku.

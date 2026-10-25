@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assist Speaker ID</title>
+<style>
+:root {
+  --bg: #f8fafc; --fg: #0f172a; --muted: #64748b; --line: #e2e8f0; --card: #ffffff;
+  --accent: #1d4ed8; --accent-soft: #dbeafe; --code: #f1f5f9; --ok: #166534; --ok-soft: #dcfce7;
+  --bad: #b91c1c; --bad-soft: #fee2e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a; --fg: #f1f5f9; --muted: #94a3b8; --line: #334155; --card: #1e293b;
+    --accent: #60a5fa; --accent-soft: #172554; --code: #1e293b; --ok: #86efac; --ok-soft: #14361f;
+    --bad: #fca5a5; --bad-soft: #3b1515;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f172a; --fg: #f1f5f9; --muted: #94a3b8; --line: #334155; --card: #1e293b;
+  --accent: #60a5fa; --accent-soft: #172554; --code: #1e293b; --ok: #86efac; --ok-soft: #14361f;
+  --bad: #fca5a5; --bad-soft: #3b1515;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; gap: 20px; align-items: center; margin-bottom: 8px; }
+header img { width: 72px; height: 72px; flex: none; }
+h1 { font-size: 2.1rem; margin: 0; letter-spacing: -0.01em; }
+.lead { color: var(--muted); margin: 4px 0 0; }
+h2 { font-size: 1.45rem; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+p, li { max-width: 72ch; }
+a { color: var(--accent); }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+  font-size: .88em; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .95em; }
+th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: var(--card); }
+.table { overflow-x: auto; }
+nav { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 18px; margin: 24px 0; }
+nav ol { margin: 6px 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+nav li { break-inside: avoid; }
+@media (max-width: 640px) { nav ol { columns: 1; } h1 { font-size: 1.7rem; } header { align-items: flex-start; } }
+.lang { margin: 4px 0 0; font-size: 0.9em; color: var(--muted); }
+.note { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.tip { background: var(--ok-soft); border-left: 4px solid var(--ok); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.warn { background: var(--bad-soft); border-left: 4px solid var(--bad); padding: 10px 14px;
+  border-radius: 6px; margin: 16px 0; }
+.flow { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; margin: 16px 0; overflow-x: auto; }
+.flow svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.flow .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.flow .hot { fill: var(--accent-soft); stroke: var(--accent); }
+.flow .okbox { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+.flow .badbox { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+.flow text { fill: var(--fg); font: 13px system-ui, sans-serif; }
+.flow .small { fill: var(--muted); font-size: 11px; }
+.flow .arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+.flow .axis { stroke: var(--muted); stroke-width: 1.5; }
+.flow .own { fill: var(--ok); }
+.flow .other { fill: var(--bad); }
+.flow .mark { stroke: var(--accent); stroke-width: 2.5; }
+.flow .dash { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.flow marker path { fill: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: .9em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/icon.png" alt="">
+  <div>
+    <h1>Assist Speaker ID</h1>
+    <p class="lead">Recognize household members by voice for Assist in Home Assistant. The assistant
+    knows who is asking and answers that person. Everything runs locally.</p>
+    <p class="lang"><a href="../pl/" hreflang="pl">Polski</a> · <strong>English</strong> · <a href="https://github.com/witold-gren/home-assistant-assist-speaker-id">GitHub</a></p>
+  </div>
+</header>
+
+<p class="note"><strong>Language:</strong> speaker recognition itself works for any language. The spoken prompts of guided enrollment come in Polish and English (following the HA language); the "Who is speaking?" and announcement keywords live in Assist Router, which currently understands Polish.</p>
+
+<nav>
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#what">What it is and why</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#recognition">Recognition under the hood</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#pipeline">Pipeline setup</a></li>
+    <li><a href="#voiceprints">Recording voiceprints</a></li>
+    <li><a href="#thresholds">Scores, thresholds and calibration</a></li>
+    <li><a href="#usage">Everyday use</a></li>
+    <li><a href="#announcements">Announcements in your own voice</a></li>
+    <li><a href="#actions">Actions and API</a></li>
+    <li><a href="#limitations">Limitations</a></li>
+    <li><a href="#privacy">Privacy</a></li>
+  </ol>
+</nav>
+
+<h2 id="what">1. What it is and why</h2>
+<p>Assist turns speech into text, but it does not know <strong>who</strong> is speaking. Voice
+satellites (Home Assistant Voice PE, ESPHome) send the command without a user, so to Home Assistant
+every sentence is anonymous. This becomes a problem with first-person questions:</p>
+<ul>
+  <li>"What classes do <strong>I</strong> have today?" – whose timetable should it read?</li>
+  <li>"Where is <strong>my</strong> phone?" – which phone should it ring?</li>
+  <li>"What's on <strong>my</strong> plate today?" – whose calendar should it read?</li>
+  <li>"Good night" – said differently to a child than to an adult.</li>
+</ul>
+<p>Whisper and other speech-to-text models do not recognize the speaker. Diarization (e.g. WhisperX)
+only answers "who spoke when" with anonymous labels, not "which household member is this".
+<strong>Assist Speaker ID</strong> adds the missing piece: it turns a voice into a "fingerprint" (a
+vector of numbers), compares it with the stored voiceprints of household members and passes the
+result on – to the conversation agent, to an LLM and to automations.</p>
+<p>The project has two parts in one repository:</p>
+<div class="table"><table>
+  <tr><th>Part</th><th>What it does</th><th>Installation</th></tr>
+  <tr><td><strong>wyoming-speaker-id service</strong></td>
+    <td>A Wyoming proxy in front of your speech-to-text server (e.g. Whisper). It forwards the
+    audio unchanged and, in parallel, computes the voice fingerprint and adds the speaker to the result.</td>
+    <td>HA add-on or a Docker container on another computer</td></tr>
+  <tr><td><strong>Assist Speaker ID integration</strong></td>
+    <td>Speech-to-text entity "Speech to text with speaker", wrapper agent "Agent with speaker",
+    sensor "Last speaker", actions for enrollment, calibration and announcements.</td>
+    <td>HACS (custom repository, type "Integration")</td></tr>
+</table></div>
+<p class="tip">It gives the most when paired with <a href="https://witold-gren.github.io/home-assistant-assist-router/en/">Assist Router</a>:
+it uses the speaker for first-person questions, the speaker's room, family terms ("my brother"),
+answers to „Kto to mówi?” (“Who is speaking?”) and announcements. Assist Speaker ID works with any
+agent, though.</p>
+
+<h2 id="how">2. How it works</h2>
+<div class="flow">
+<svg viewBox="0 0 900 400" role="img" aria-label="Diagram: satellite, speech-to-text entity with speaker, wyoming-speaker-id service, Whisper and voice model, result with speaker, agent, sensor">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box" x="10" y="30" width="150" height="56" rx="8"/>
+  <text x="85" y="54" text-anchor="middle">Satellite</text>
+  <text class="small" x="85" y="72" text-anchor="middle">wake word, audio</text>
+  <rect class="hot" x="200" y="30" width="230" height="56" rx="8"/>
+  <text x="315" y="54" text-anchor="middle">HA: STT with speaker</text>
+  <text class="small" x="315" y="72" text-anchor="middle">integration's STT entity</text>
+  <rect class="hot" x="470" y="30" width="220" height="56" rx="8"/>
+  <text x="580" y="54" text-anchor="middle">wyoming-speaker-id</text>
+  <text class="small" x="580" y="72" text-anchor="middle">add-on or container, port 10350</text>
+  <rect class="box" x="730" y="10" width="160" height="50" rx="8"/>
+  <text x="810" y="32" text-anchor="middle">Whisper</text>
+  <text class="small" x="810" y="49" text-anchor="middle">audio unchanged → text</text>
+  <rect class="box" x="730" y="76" width="160" height="50" rx="8"/>
+  <text x="810" y="98" text-anchor="middle">CAM++ voice model</text>
+  <text class="small" x="810" y="115" text-anchor="middle">in parallel, ~90 ms</text>
+  <path class="arrow" d="M160,58 H198"/>
+  <path class="arrow" d="M430,58 H468"/>
+  <path class="arrow" d="M690,50 L728,36"/>
+  <path class="arrow" d="M690,66 L728,98"/>
+  <rect class="box" x="400" y="170" width="380" height="56" rx="8"/>
+  <text x="590" y="194" text-anchor="middle">transcript: text + speaker, speaker_score, …</text>
+  <text class="small" x="590" y="212" text-anchor="middle">text identical to plain Whisper output</text>
+  <path class="arrow" d="M580,86 V168"/>
+  <rect class="hot" x="40" y="170" width="300" height="56" rx="8"/>
+  <text x="190" y="194" text-anchor="middle">Result in the current pipeline run</text>
+  <text class="small" x="190" y="212" text-anchor="middle">same run: STT → agent</text>
+  <path class="arrow" d="M400,198 H342"/>
+  <rect class="box" x="10" y="290" width="200" height="70" rx="8"/>
+  <text x="110" y="314" text-anchor="middle">“Agent with speaker”</text>
+  <text class="small" x="110" y="332" text-anchor="middle">adds “…speaking is Anna.”</text>
+  <text class="small" x="110" y="348" text-anchor="middle">→ any agent</text>
+  <rect class="box" x="240" y="290" width="200" height="70" rx="8"/>
+  <text x="340" y="314" text-anchor="middle">Assist Router</text>
+  <text class="small" x="340" y="332" text-anchor="middle">get_speaker(): “I”, “my”,</text>
+  <text class="small" x="340" y="348" text-anchor="middle">room, family, announcements</text>
+  <rect class="box" x="470" y="290" width="200" height="70" rx="8"/>
+  <text x="570" y="314" text-anchor="middle">“Last speaker” sensor</text>
+  <text class="small" x="570" y="332" text-anchor="middle">event speaker_id_identified</text>
+  <text class="small" x="570" y="348" text-anchor="middle">→ automations</text>
+  <rect class="box" x="700" y="290" width="190" height="70" rx="8"/>
+  <text x="795" y="314" text-anchor="middle">Last recording</text>
+  <text class="small" x="795" y="332" text-anchor="middle">RAM only, 10 min</text>
+  <text class="small" x="795" y="348" text-anchor="middle">→ sample or announcement</text>
+  <path class="arrow" d="M120,226 L110,288"/>
+  <path class="arrow" d="M230,226 L330,288"/>
+  <path class="arrow" d="M300,226 L560,288"/>
+  <path class="arrow" d="M700,226 L790,288"/>
+</svg>
+</div>
+<ol>
+  <li>The <strong>satellite</strong> detects the wake word and sends the recorded command to the
+    Assist pipeline.</li>
+  <li>The pipeline uses the <strong>"Speech to text with speaker"</strong> entity instead of plain
+    Whisper. The entity talks to the service over the Wyoming protocol, just like the built-in
+    Wyoming integration.</li>
+  <li>The <strong>wyoming-speaker-id service</strong> forwards the audio to your speech-to-text
+    server unchanged and keeps a copy for itself. When the recording ends, it computes the voice
+    fingerprint while Whisper is still transcribing anyway.</li>
+  <li>The service returns <strong>the same text as Whisper</strong>, with extra fields:
+    <code>speaker</code> (person id or <code>unknown</code>), <code>speaker_name</code>,
+    <code>speaker_score</code>, <code>speaker_scores</code> (scores of all people),
+    <code>speech_seconds</code>.</li>
+  <li>The integration remembers the speaker <strong>for the current pipeline run</strong>. HA calls
+    speech-to-text and the agent in the same task, so the agent gets the speaker of exactly this
+    sentence, not of a sentence spoken in another room at the same moment.</li>
+  <li>The speaker can then be used by the wrapper agent, by Assist Router or another agent via
+    <code>get_speaker()</code>, and by automations via the sensor and the event.</li>
+</ol>
+<p class="note"><strong>Why a proxy and not a separate model alongside?</strong> The Wyoming client
+in HA reads only the text from the result, and the speech-to-text entity does not know which
+satellite the recording came from. So the service adds the speaker to the transcription result, and
+the integration has its own client that reads these fields. A regular Wyoming client ignores the
+extra fields, so the service can safely replace Whisper: in the worst case it behaves like plain
+Whisper.</p>
+
+<h2 id="recognition">3. Recognition under the hood</h2>
+<div class="flow">
+<svg viewBox="0 0 900 250" role="img" aria-label="Diagram: audio, speech detection, CAM++ model, vector of 192 numbers, comparison with voiceprints, decision: threshold and margin">
+  <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box" x="10" y="20" width="130" height="64" rx="8"/>
+  <text x="75" y="46" text-anchor="middle">Audio</text>
+  <text class="small" x="75" y="64" text-anchor="middle">16 kHz, mono</text>
+  <rect class="box" x="170" y="20" width="150" height="64" rx="8"/>
+  <text x="245" y="46" text-anchor="middle">Speech detection</text>
+  <text class="small" x="245" y="64" text-anchor="middle">no silence, up to 8 s</text>
+  <rect class="hot" x="350" y="20" width="150" height="64" rx="8"/>
+  <text x="425" y="46" text-anchor="middle">CAM++ model</text>
+  <text class="small" x="425" y="64" text-anchor="middle">sherpa-onnx, CPU</text>
+  <rect class="box" x="530" y="20" width="150" height="64" rx="8"/>
+  <text x="605" y="46" text-anchor="middle">Vector</text>
+  <text class="small" x="605" y="64" text-anchor="middle">192 numbers = voice timbre</text>
+  <rect class="box" x="710" y="20" width="180" height="64" rx="8"/>
+  <text x="800" y="46" text-anchor="middle">Comparison</text>
+  <text class="small" x="800" y="64" text-anchor="middle">cosine with each voiceprint</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M140,52 H168"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M320,52 H348"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M500,52 H528"/>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M680,52 H708"/>
+  <rect class="box" x="560" y="120" width="330" height="110" rx="8"/>
+  <text x="575" y="144">Anna 0.82 · Kasia 0.41 · Tomek 0.18 · Jan 0.12</text>
+  <text class="small" x="575" y="168">1. best score ≥ person's threshold (e.g. 0.50)?</text>
+  <text class="small" x="575" y="186">2. lead over the runner-up ≥ margin (e.g. 0.05)?</text>
+  <text class="small" x="575" y="210">both “yes” → Anna; otherwise → unknown</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M800,84 V118"/>
+  <rect class="box" x="10" y="120" width="500" height="110" rx="8"/>
+  <text x="25" y="144">Person's voiceprint</text>
+  <text class="small" x="25" y="166">average of vectors from 10–15 recorded sentences of this person</text>
+  <text class="small" x="25" y="184">stored in speakers.json; recordings are not kept</text>
+  <text class="small" x="25" y="208">less than 1 s of speech → always unknown (too little to judge)</text>
+  <path class="arrow" style="marker-end:url(#arrow2)" d="M510,175 H558"/>
+</svg>
+</div>
+<ul>
+  <li><strong>Speech detection:</strong> a simple energy detector cuts out silence. Only actual
+    speech counts, at most the first 8 seconds.</li>
+  <li><strong>Voice fingerprint:</strong> the <strong>3D-Speaker CAM++</strong> model (zh_en
+    "advanced" version, Apache-2.0 license) turns speech into a vector of 192 numbers. It describes
+    the timbre of the voice: pitch, resonance, articulation. <strong>It does not depend on what is
+    said</strong>, so recognition works for any command.</li>
+  <li>A <strong>person's voiceprint</strong> is the average of the vectors of their samples. More
+    samples from different situations give a more stable voiceprint.</li>
+  <li><strong>Comparison</strong> uses cosine similarity (the angle between vectors), usually from
+    0 to 1. The decision is described in <a href="#thresholds">Scores, thresholds and calibration</a>.</li>
+  <li><strong>No added latency:</strong> the fingerprint is computed in parallel with
+    transcription. Measured on a Jetson AGX Orin (CPU, 2 threads): median of the whole command
+    unchanged (1329 → 1330 ms), 90th percentile +95 ms.</li>
+</ul>
+
+<h3>Choosing the model</h3>
+<p>Before choosing, we compared several models available in sherpa-onnx. Test sets: 6 Polish Piper
+voices × 12 sentences, and recordings of 3 people from the sherpa-onnx examples. Accuracy was
+measured with leave-one-out. EER (equal error rate) is the point where false accepts equal false
+rejects – lower is better.</p>
+<div class="table"><table>
+  <tr><th>Model</th><th>Dimension</th><th>3 s of speech</th><th>Piper: accuracy / EER</th><th>People: accuracy / EER</th></tr>
+  <tr><td><strong>3D-Speaker CAM++ zh_en "advanced"</strong> (default)</td><td>192</td><td>91 ms</td><td>100% / 0.2%</td><td>100% / 0%</td></tr>
+  <tr><td>NeMo TitaNet-small</td><td>192</td><td>59 ms</td><td>100% / 0.9%</td><td>100% / 0%</td></tr>
+  <tr><td>3D-Speaker ERes2Net (VoxCeleb)</td><td>192</td><td>218 ms</td><td>100% / 1.9%</td><td>100% / 0%</td></tr>
+  <tr><td>WeSpeaker ResNet34-LM</td><td>256</td><td>257 ms</td><td>98.6% / 12.4%</td><td>92.9% / 15.4%</td></tr>
+  <tr><td>3D-Speaker CAM++ (VoxCeleb)</td><td>512</td><td>90 ms</td><td>68.1% / 40.8%</td><td>71.4% / 37.7%</td></tr>
+</table></div>
+<p>Through the whole chain (Piper → wyoming-speaker-id → Whisper), every utterance with at least
+1 s of speech was assigned to the right person, with scores of 0.76–0.92. A different model can be
+set with the <code>model</code> option (a sherpa-onnx model name or a path to an <code>.onnx</code>
+file); after changing the model, voiceprints must be recorded again.</p>
+
+<h2 id="requirements">4. Requirements</h2>
+<ul>
+  <li>Home Assistant with Assist and at least one voice satellite.</li>
+  <li>A speech-to-text server speaking the Wyoming protocol: the Whisper add-on or your own
+    faster-whisper (e.g. on a computer with a GPU). Assist Speaker ID does <strong>not replace</strong>
+    it, it sits in front of it.</li>
+  <li>For the service: an amd64 or aarch64 CPU (e.g. Raspberry Pi 4/5, NUC, Jetson). The model takes
+    about 30 MB and runs on the CPU; no GPU needed.</li>
+  <li>HACS to install the integration.</li>
+</ul>
+<p class="tip"><strong>Proven in practice:</strong> the author runs the service daily on an
+<strong>NVIDIA Jetson AGX Orin 64 GB</strong>, as a container next to faster-whisper (Whisper on the
+GPU, voice model on the CPU), for the whole family and 7 satellites. It works very well: recognition
+takes about 90 ms and runs while transcription is in progress, so commands are no slower than with
+Whisper alone.</p>
+
+<h2 id="installation">5. Installation</h2>
+<h3>Step 1a: the service as an HA add-on</h3>
+<p>The simplest route when Home Assistant runs as HA OS or Supervised.</p>
+<ol>
+  <li>Settings → Add-ons → Add-on store → ⋮ → Repositories, and add
+    <code>https://github.com/witold-gren/home-assistant-assist-speaker-id</code>.</li>
+  <li>Install <strong>Assist Speaker ID</strong>.</li>
+  <li>On the Configuration tab set <strong>upstream</strong> (the speech-to-text server):
+    <code>tcp://core-whisper:10300</code> for the Whisper add-on, or the address of your own server,
+    e.g. <code>tcp://192.168.1.10:10300</code>.</li>
+  <li>Start the add-on. On first start it downloads the model (about 30 MB). It then announces
+    itself to Home Assistant with a random API token, and HA offers the integration (step 2).</li>
+</ol>
+<div class="table"><table>
+  <tr><th>Add-on option</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>upstream</code></td><td><code>tcp://core-whisper:10300</code></td><td>Wyoming speech-to-text server</td></tr>
+  <tr><td><code>threshold</code> / <code>margin</code></td><td>0.5 / 0.05</td><td>shared threshold and lead over the runner-up (initial values)</td></tr>
+  <tr><td><code>min_speech</code> / <code>max_speech</code></td><td>1.0 / 8.0 s</td><td>shorter speech gives "unknown"; how much speech to use</td></tr>
+  <tr><td><code>threads</code></td><td>2</td><td>model CPU threads</td></tr>
+  <tr><td><code>model</code></td><td>CAM++ zh_en</td><td>another sherpa-onnx model (name or path)</td></tr>
+  <tr><td><code>api_token</code></td><td>random</td><td>your own API token (usually not needed)</td></tr>
+  <tr><td><code>debug</code></td><td>off</td><td>verbose log</td></tr>
+</table></div>
+
+<h3>Step 1b: the service as a container (e.g. next to Whisper on another computer)</h3>
+<p>When Whisper runs on a separate machine, it is best to run the service next to it. The audio then
+does not cross the network twice.</p>
+<pre><code>git clone https://github.com/witold-gren/home-assistant-assist-speaker-id
+docker build -t wyoming-speaker-id home-assistant-assist-speaker-id/speaker_id/
+docker run -d --name speaker-id --restart unless-stopped \
+  -p 10350:10350 -p 10351:10351 -v speaker-id-data:/data \
+  -e SPEAKER_ID_UPSTREAM=tcp://192.168.1.10:10300 \
+  -e SPEAKER_ID_API_TOKEN=dlugi-losowy-token \
+  wyoming-speaker-id</code></pre>
+<p>The same container in <code>docker-compose.yaml</code>, next to Whisper:</p>
+<pre><code>services:
+  whisper:
+    image: rhasspy/wyoming-whisper
+    # … your existing configuration
+  speaker-id:
+    build: ./home-assistant-assist-speaker-id/speaker_id
+    restart: unless-stopped
+    ports: ["10350:10350", "10351:10351"]
+    volumes: ["./speaker-id/data:/data"]
+    environment:
+      SPEAKER_ID_UPSTREAM: tcp://whisper:10300
+      SPEAKER_ID_API_TOKEN: dlugi-losowy-token</code></pre>
+<div class="table"><table>
+  <tr><th>Variable</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>SPEAKER_ID_UPSTREAM</code></td><td>(required)</td><td>Wyoming speech-to-text server</td></tr>
+  <tr><td><code>SPEAKER_ID_THRESHOLD</code> / <code>SPEAKER_ID_MARGIN</code></td><td>0.5 / 0.05</td><td>shared threshold and margin</td></tr>
+  <tr><td><code>SPEAKER_ID_MIN_SPEECH</code> / <code>SPEAKER_ID_MAX_SPEECH</code></td><td>1.0 / 8.0</td><td>minimum speech and how much speech to use (seconds)</td></tr>
+  <tr><td><code>SPEAKER_ID_MODEL</code></td><td>CAM++ zh_en</td><td>sherpa-onnx model name or path</td></tr>
+  <tr><td><code>SPEAKER_ID_API_TOKEN</code></td><td>none</td><td>HTTP API token; without it, keep port 10351 strictly on your home network</td></tr>
+  <tr><td><code>SPEAKER_ID_THREADS</code>, <code>SPEAKER_ID_DEBUG</code></td><td>2, 0</td><td>model threads, verbose log</td></tr>
+</table></div>
+<p>Port <strong>10350</strong> is Wyoming (speech-to-text with speaker), port
+<strong>10351</strong> is the HTTP API (voiceprints, calibration, last recording).</p>
+
+<h3>Step 2: the integration</h3>
+<ol>
+  <li>HACS → ⋮ → Custom repositories → add the repository URL, type
+    <strong>Integration</strong>. Install <strong>Assist Speaker ID</strong> and restart HA.</li>
+  <li>With the add-on: HA shows the discovered integration in Settings → Devices &amp; services.
+    Click Configure.</li>
+  <li>With a container: Settings → Devices &amp; services → Add integration → <strong>Assist Speaker
+    ID</strong> and enter the host, Wyoming port (10350), API port (10351) and token.</li>
+</ol>
+<p>The integration creates an "Assist Speaker ID" device with the speech-to-text entity
+<strong>"Speech to text with speaker"</strong>, the agent <strong>"Agent with speaker"</strong> and
+the sensor <strong>"Last speaker"</strong>.</p>
+<p>The integration options (Configure) are a menu with two entries:</p>
+<ul>
+  <li><strong>Agent and people:</strong> mapping each voice to an HA person (<code>person.*</code>),
+    the target agent for "Agent with speaker", the prompt line (default
+    <code>The person speaking is {name}.</code>) and whether to run commands as the speaker's HA user
+    (<code>context.user_id</code>).</li>
+  <li><strong>Recognition thresholds:</strong> shared threshold, margin, minimum speech and each
+    person's threshold. Saved values go to the service and apply from the next sentence, without a
+    restart.</li>
+</ul>
+
+<h2 id="pipeline">6. Pipeline setup</h2>
+<p>Settings → Voice assistants → pick the pipeline (assistant) of each satellite:</p>
+<ol>
+  <li><strong>Speech-to-text:</strong> "Speech to text with speaker". Set the language to what you
+    used in Whisper so far.</li>
+  <li><strong>Conversation agent:</strong>
+    <ul>
+      <li>Assist Router or another agent that reads the speaker itself, <em>or</em></li>
+      <li>"Agent with speaker", which adds the speaker for any agent (chosen in the integration
+        options).</li>
+    </ul></li>
+  <li><strong>Turn off "Prefer handling commands locally"</strong>.</li>
+</ol>
+<p class="warn"><strong>Why turn off local handling?</strong> When it is on, HA tries its own intents
+before asking the agent. The built-in broadcast intent would then catch „Ogłoszenie, …”
+(“Announcement, …”) and read the text with speech synthesis instead of playing your recording, and
+during enrollment the agent would not get to reply with a short "Recorded 3 of 10". Assist Router and
+"Agent with speaker" pass everything HA understands back to HA anyway, so regular commands keep
+working.</p>
+<p class="tip">Switch satellites one at a time. If something does not work, just switch the pipeline
+back to plain Whisper.</p>
+<p>Check: Settings → Voice assistants → pipeline → ⋮ → Debug. After a command from a satellite, the
+"Last speaker" sensor shows <code>unknown</code> (no voiceprints yet), and the
+<code>speech_seconds</code> attribute shows the length of speech. That means the audio is passing
+through the service.</p>
+
+<h2 id="voiceprints">7. Recording voiceprints</h2>
+<p>Each household member records 10–15 ordinary sentences. The easiest way is <strong>guided
+enrollment</strong>: the satellite asks for each next sentence itself, no wake word needed.</p>
+<ol>
+  <li>Developer tools → Actions → <code>speaker_id.start_enrollment</code>:
+<pre><code>action: speaker_id.start_enrollment
+data:
+  speaker: anna            # person id: lowercase, no spaces
+  name: Anna               # name that is spoken and displayed
+  count: 10
+  satellite: assist_satellite.salon   # the satellite Anna is standing next to</code></pre></li>
+  <li>The satellite says: "Recording a voiceprint for Anna. Say a normal command, for example: what
+    is the weather tomorrow." and listens.</li>
+  <li>Anna says any sentence, e.g. "What will the weather be like in Kraków tomorrow?". The command
+    is <strong>not executed</strong>; the satellite immediately replies "Recorded 1 of 10. Next
+    sentence." and keeps listening.</li>
+  <li>A sentence that is too short (under 1.5 s of speech) does not count – the satellite says "Too
+    short. Please say a longer sentence.". After silence or a cut-off conversation it asks again ("I
+    did not hear anything. Please say a sentence."), and after 3 attempts without a new sample it
+    stops.</li>
+  <li>After the last sample: "Done, recorded 10 voice samples for Anna.". The voiceprint works right
+    away.</li>
+</ol>
+<p>Enrollment also works without the <code>satellite</code> field, but then each sentence starts
+with the wake word. Progress is shown in the <code>enrollment</code> attribute of the "Last speaker"
+sensor. To cancel: <code>speaker_id.stop_enrollment</code>.</p>
+<p><strong>Enrollment went wrong?</strong> Add more samples with the same action (new ones are added
+to the old ones) or start over: <code>speaker_id.delete_speaker</code> and enroll again. You can add
+a single sentence afterwards with <code>speaker_id.add_last_sample</code>: the last utterance (at
+most 10 min old) becomes a sample of the given person.</p>
+<p class="tip"><strong>Good samples:</strong> record through the satellite and from the distance the
+person usually speaks from – the microphone and the room change the voice more than the words do.
+Use ordinary commands of a few words, in a normal tone (shouting, whispering and laughing lower the
+scores). Enroll <strong>everyone</strong> in the household before you calibrate. Children's voices
+change as they grow, so add new samples for them every few months.</p>
+
+<h2 id="thresholds">8. Scores, thresholds and calibration</h2>
+<h3>Similarity</h3>
+<p>Each utterance is compared with each person's voiceprint. The score is the
+<strong>similarity</strong>, usually from 0 to 1 (given as a percentage in the answer to „Kto to
+mówi?”):</p>
+<div class="table"><table>
+  <tr><th>Similarity</th><th>What it usually means (CAM++, satellite microphone)</th></tr>
+  <tr><td>0.75–0.95</td><td>same person, good conditions</td></tr>
+  <tr><td>0.55–0.75</td><td>same person, but short, far away, noisy or in a different tone</td></tr>
+  <tr><td>0.35–0.55</td><td>similar voice, often siblings or a parent and child of the same sex</td></tr>
+  <tr><td>0–0.35</td><td>a different person</td></tr>
+</table></div>
+<p>This is not a measure of how "unique" a voice is. A high score only means that <em>this
+utterance</em> is very similar to <em>this voiceprint</em>.</p>
+
+<h3>Threshold and margin</h3>
+<p>The best-matching person is recognized only if <strong>both</strong> conditions hold:</p>
+<ol>
+  <li><strong>similarity ≥ that person's threshold</strong> (their own, or the shared one if they
+    have none);</li>
+  <li><strong>similarity − runner-up's score ≥ margin.</strong> With two nearly equal scores it is
+    better to say "I don't know" than to guess.</li>
+</ol>
+<p>Otherwise the speaker is "unknown" (<code>unknown</code>), and Assist behaves as if there were no
+recognition. A wrong guess is worse than no recognition, so the system is cautious by default.</p>
+<div class="flow">
+<svg viewBox="0 0 900 230" role="img" aria-label="Similarity axis: the person's own samples on the right, other people's on the left, threshold in the middle of the gap, margin example">
+  <line class="axis" x1="40" y1="120" x2="860" y2="120"/>
+  <text class="small" x="40" y="142" text-anchor="middle">0</text>
+  <text class="small" x="245" y="142" text-anchor="middle">0.25</text>
+  <text class="small" x="450" y="142" text-anchor="middle">0.50</text>
+  <text class="small" x="655" y="142" text-anchor="middle">0.75</text>
+  <text class="small" x="860" y="142" text-anchor="middle">1</text>
+  <circle class="other" cx="122" cy="104" r="6"/><circle class="other" cx="155" cy="96" r="6"/>
+  <circle class="other" cx="180" cy="106" r="6"/><circle class="other" cx="212" cy="98" r="6"/>
+  <circle class="other" cx="240" cy="104" r="6"/><circle class="other" cx="270" cy="94" r="6"/>
+  <circle class="other" cx="290" cy="106" r="6"/>
+  <circle class="own" cx="621" cy="104" r="6"/><circle class="own" cx="678" cy="96" r="6"/>
+  <circle class="own" cx="694" cy="106" r="6"/><circle class="own" cx="710" cy="94" r="6"/>
+  <circle class="own" cx="725" cy="104" r="6"/><circle class="own" cx="740" cy="96" r="6"/>
+  <circle class="own" cx="760" cy="106" r="6"/><circle class="own" cx="785" cy="98" r="6"/>
+  <text x="200" y="70" text-anchor="middle">others' samples</text>
+  <text class="small" x="290" y="84" text-anchor="middle">others_max 0.31</text>
+  <text x="700" y="70" text-anchor="middle">Tomek's samples</text>
+  <text class="small" x="621" y="84" text-anchor="middle">own_min 0.71</text>
+  <line class="dash" x1="290" y1="88" x2="290" y2="120"/>
+  <line class="dash" x1="621" y1="88" x2="621" y2="120"/>
+  <line class="mark" x1="483" y1="40" x2="483" y2="128"/>
+  <text x="483" y="32" text-anchor="middle">threshold 0.54</text>
+  <text class="small" x="455" y="104" text-anchor="middle">gap = headroom</text>
+  <rect class="okbox" x="40" y="168" width="400" height="48" rx="8"/>
+  <text x="56" y="188">Tomek 0.82, Anna 0.30 → Tomek</text>
+  <text class="small" x="56" y="205">0.82 ≥ 0.54 and lead 0.52 ≥ margin 0.05</text>
+  <rect class="badbox" x="460" y="168" width="400" height="48" rx="8"/>
+  <text x="476" y="188">Kasia 0.62, Jan 0.59 → unknown</text>
+  <text class="small" x="476" y="205">threshold met, but lead 0.03 &lt; margin 0.05</text>
+</svg>
+</div>
+<ul>
+  <li>A <strong>higher threshold</strong> is stricter: fewer mistakes, but "unknown" more often.</li>
+  <li>A <strong>lower threshold</strong> is more lenient: "unknown" less often, but mistakes are
+    more likely.</li>
+  <li><strong>Similar voices</strong> (siblings) need a <strong>higher</strong> threshold or a larger
+    margin. Not because their voiceprint is weaker, but because other voices come close to it – the
+    bar has to be higher so a sibling does not clear it.</li>
+</ul>
+<div class="table"><table>
+  <tr><th>Parameter</th><th>Default</th><th>Where to change it</th></tr>
+  <tr><td>Shared threshold</td><td>0.50</td><td>integration options → Recognition thresholds</td></tr>
+  <tr><td>Person's threshold</td><td>none = shared</td><td>integration options, action <code>speaker_id.set_speaker</code>, calibration with <code>apply: true</code></td></tr>
+  <tr><td>Margin</td><td>0.05</td><td>integration options</td></tr>
+  <tr><td>Minimum speech</td><td>1.0 s</td><td>integration options; a shorter utterance is always "unknown"</td></tr>
+</table></div>
+<p>Values from the integration options are stored in the service (<code>speakers.json</code>) and
+take precedence over add-on options and environment variables, which are only initial values.</p>
+
+<h3>Calibration</h3>
+<p>The <code>speaker_id.calibrate</code> action compares each person's samples with their voiceprint
+and with the other people's samples, then suggests a threshold. With <code>apply: true</code> it
+saves the per-person thresholds right away.</p>
+<div class="table"><table>
+  <tr><th>Report field</th><th>Meaning</th></tr>
+  <tr><td><code>samples</code></td><td>number of samples</td></tr>
+  <tr><td><code>own_min</code></td><td>the <strong>worst</strong> own sample: similarity to the voiceprint built from the person's <em>other</em> samples</td></tr>
+  <tr><td><code>own_p10</code></td><td>10th percentile: 9 out of 10 own samples are at least this similar</td></tr>
+  <tr><td><code>own_mean</code></td><td>average similarity of own samples</td></tr>
+  <tr><td><code>others_max</code></td><td>the <strong>most similar sample of someone else</strong></td></tr>
+  <tr><td><code>separable</code></td><td><code>true</code> when <code>own_min &gt; others_max</code>: no one else's sample came close to the worst own sample</td></tr>
+  <tr><td><code>suggested_threshold</code></td><td>midpoint between <code>own_p10</code> and <code>others_max</code> (within 0.2–0.9)</td></tr>
+</table></div>
+<p><strong>Example (Tomek, adult):</strong></p>
+<pre><code>samples: 10
+own_min: 0.709      # worst own sample: 71% similar to the voiceprint
+own_p10: 0.778      # 9 out of 10 own samples have at least 78%
+own_mean: 0.803     # 80% on average
+others_max: 0.305   # most similar sample of someone else: only 31%
+separable: true     # 0.709 > 0.305 - voices clearly separated
+suggested_threshold: 0.541   # (0.778 + 0.305) / 2</code></pre>
+<p>There is a 40-point gap between the worst own sample (71%) and the closest one from someone else
+(31%). Any threshold between roughly 0.35 and 0.70 will work, and the suggested 0.54 sits in the
+middle with headroom on both sides. For a child you might get e.g. <code>own_p10: 0.74</code> and
+<code>others_max: 0.68</code> (a sibling): a threshold of 0.71 and only a 6-point gap. Then it is worth
+raising the margin as well.</p>
+
+<h3>Similar voices (e.g. siblings)</h3>
+<ol>
+  <li>Record more samples: 15–20 per person, from the usual satellite and distance.</li>
+  <li>Calibrate only after everyone is enrolled: <code>others_max</code> is computed only from people
+    who have voiceprints.</li>
+  <li>With <code>separable: false</code> the culprit is often a single bad sample (someone talked
+    over it, noise). Add samples or re-enroll that person.</li>
+  <li>Set the threshold between <code>others_max</code> and <code>own_p10</code>: closer to
+    <code>own_p10</code> means fewer mistakes, closer to <code>others_max</code> – fewer "unknowns".</li>
+  <li>Margin 0.08–0.15: the assistant will say it is not sure instead of guessing.</li>
+  <li>Test „Kto to mówi?” on a few longer sentences from each person and look at the runner-up's
+    score – the gap between them is your real headroom.</li>
+</ol>
+<p class="note">Calibration with <code>apply: true</code> overwrites per-person thresholds. Make
+manual tweaks after it.</p>
+
+<h2 id="usage">9. Everyday use</h2>
+<h3>„Kto to mówi?” (“Who is speaking?”)</h3>
+<p>With Assist Router, ask „Kto to mówi?”, „Kim jestem?” (“Who am I?”), „Czy mnie rozpoznajesz?”
+(“Do you recognize me?”) or „Czyj to głos?” (“Whose voice is this?”). The answer gives the person and
+the similarity, e.g. „Mówi Anna, podobieństwo 82%. Następna osoba: Kasia, 41%.” (“Anna is speaking,
+similarity 82%. Next person: Kasia, 41%.”). It is the quickest test of thresholds and voiceprint
+quality.</p>
+
+<h3>"Agent with speaker": the speaker for any agent</h3>
+<p>Set it in the pipeline and choose the target agent in the integration options (e.g. Ollama,
+OpenAI, HA's built-in agent). Before passing the command on, "Agent with speaker":</p>
+<ul>
+  <li>adds a line with the speaker to the system prompt (default "The person speaking is Anna."), so
+    an LLM agent can answer "Anna, today you have…";</li>
+  <li>optionally sets <code>context.user_id</code> to the speaker's HA user, so the history shows who
+    switched the light;</li>
+  <li>handles enrollment: while recording it does not execute commands and replies immediately.</li>
+</ul>
+
+<h3>Your own agent or integration: <code>get_speaker()</code></h3>
+<pre><code>try:
+    from custom_components.speaker_id.api import get_speaker
+except ImportError:
+    get_speaker = None
+
+speaker = get_speaker(hass) if get_speaker else None
+if speaker and speaker.speaker:
+    ...  # speaker.speaker (id), .name, .person, .user_id, .score</code></pre>
+<p>An agent that handles enrollment itself calls <code>enrollment_reply(hass)</code> first: it
+returns a short reply ("Recorded 3 of 10. Next sentence.") and whether to keep listening, or
+<code>None</code> for a regular utterance. Assist Router does this: a first-person question without a
+name ("what classes do <strong>I</strong> have") refers to the speaker's data, "here" is the speaker's
+room, and "my brother" is a specific family member.</p>
+
+<h3>Automations</h3>
+<p>The <strong>"Last speaker"</strong> sensor (state: name or <code>unknown</code>; attributes:
+<code>speaker</code>, <code>name</code>, <code>person</code>, <code>score</code>,
+<code>scores</code>, <code>speech_seconds</code>, <code>enrollment</code>) and the
+<code>speaker_id_identified</code> event. The utterance text is deliberately kept out of the
+history.</p>
+<p>HA runs automations with a sentence trigger before the agent, so they do not get the speaker
+directly. The sensor is updated in the same command, just before them, though – a result from a few
+seconds ago is the speaker of this sentence. A handy macro in
+<code>/config/custom_templates/speaker.jinja</code>:</p>
+<pre><code>{% macro speaker(max_s=20) -%}
+  {%- set s = states.sensor.assist_speaker_id_last_speaker -%}
+  {%- if s and (now() - s.last_updated).total_seconds() &lt;= max_s -%}
+    {{- s.attributes.speaker or '' -}}
+  {%- endif -%}
+{%- endmacro %}</code></pre>
+<p>After creating the file, run the <code>homeassistant.reload_custom_templates</code> action.
+Example: "Where is my phone?" rings the phone of the person asking:</p>
+<pre><code>triggers:
+  - trigger: conversation
+    command: "where is my phone"
+actions:
+  - variables:
+      who: "{% from 'speaker.jinja' import speaker %}{{ speaker() }}"
+  - if: "{{ who in ['anna', 'tom'] }}"
+    then:
+      - action: script.ring_phone     # your script, e.g. ringing via the HA app
+        data: { person: "{{ who }}" }
+      - set_conversation_response: "Ringing your phone."
+    else:
+      - set_conversation_response: "I don't know who is asking. Whose phone should I find?"</code></pre>
+<p>The sensor id depends on the HA language; in Polish it is
+<code>sensor.assist_speaker_id_ostatni_mowca</code>.</p>
+
+<h2 id="announcements">10. Announcements in your own voice</h2>
+<p>„OK Nabu, <strong>ogłoszenie</strong>, dzieci, proszę przyjść na obiad.” (“OK Nabu,
+<strong>announcement</strong>, kids, please come to dinner.”) The other speakers play <strong>your
+recording</strong> – exactly what you said after the wake word – instead of reading the text with
+speech synthesis. You can hear who is calling and in what tone.</p>
+<ul>
+  <li>The recording is the last utterance from the service, kept only in RAM.</li>
+  <li>HA serves it to the speakers at a one-time signed URL
+    <code>/api/speaker_id/announcement/&lt;token&gt;</code>, valid for 10 minutes. Nothing is written
+    to disk.</li>
+  <li>Assist Router recognizes „ogłoszenie” (“announcement”), „komunikat” (“message”), „do
+    wszystkich” (“to everyone”) and „intercom” at the start of a sentence. The speaker that recorded
+    it only replies „Ogłoszenie wysłane.” (“Announcement sent.”).</li>
+  <li>Without Assist Router, use the <code>speaker_id.announce_last</code> action in an
+    automation:</li>
+</ul>
+<div class="table"><table>
+  <tr><th>Field</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>satellites</code></td><td>all satellites that support announcements</td><td>where to play</td></tr>
+  <tr><td><code>exclude</code></td><td>none</td><td>satellite to skip, usually the one that recorded</td></tr>
+  <tr><td><code>media_players</code></td><td>none</td><td>extra players, e.g. speakers via Music Assistant (<code>play_media</code> with <code>announce: true</code>)</td></tr>
+  <tr><td><code>preannounce</code></td><td><code>true</code></td><td>short chime before the recording</td></tr>
+  <tr><td><code>prefer_players</code></td><td><code>false</code></td><td>one speaker per room: an available media player (e.g. a HomePod) instead of the satellite there; <code>off</code> counts as unavailable; the announcing room gets nothing</td></tr>
+  <tr><td><code>max_age</code></td><td>60 s</td><td>an older utterance is not announced</td></tr>
+</table></div>
+<p>A conversation agent can do the same with
+<code>async_announce_last(hass, exclude=…, media_players=…)</code> from
+<code>custom_components.speaker_id.api</code>. Remember to turn off local handling in the pipeline
+(section <a href="#pipeline">6</a>).</p>
+
+<h2 id="actions">11. Actions and API</h2>
+<div class="table"><table>
+  <tr><th>Action</th><th>What it does</th></tr>
+  <tr><td><code>speaker_id.start_enrollment</code></td><td>records a voiceprint: <code>speaker</code>, <code>name</code>, <code>count</code>, optionally <code>satellite</code> (guided enrollment)</td></tr>
+  <tr><td><code>speaker_id.stop_enrollment</code></td><td>cancels enrollment</td></tr>
+  <tr><td><code>speaker_id.add_last_sample</code></td><td>the last utterance (at most 10 min old) as a person's sample</td></tr>
+  <tr><td><code>speaker_id.calibrate</code></td><td>calibration report and suggested thresholds; <code>apply: true</code> saves the thresholds</td></tr>
+  <tr><td><code>speaker_id.set_speaker</code></td><td>changes a person's name and own threshold</td></tr>
+  <tr><td><code>speaker_id.delete_speaker</code></td><td>deletes a person's voiceprint</td></tr>
+  <tr><td><code>speaker_id.list_speakers</code></td><td>list of people with sample counts and thresholds</td></tr>
+  <tr><td><code>speaker_id.announce_last</code></td><td>plays the last utterance as an announcement</td></tr>
+</table></div>
+<p>The service also has an HTTP API (port 10351, header <code>Authorization: Bearer &lt;token&gt;</code>),
+useful for scripts and tests:</p>
+<div class="table"><table>
+  <tr><th>Request</th><th>What it does</th></tr>
+  <tr><td><code>GET /api/info</code>, <code>GET/PUT /api/settings</code></td><td>version and model; thresholds, margin, minimum speech</td></tr>
+  <tr><td><code>GET /api/speakers</code>, <code>PUT/DELETE /api/speakers/{id}</code></td><td>list of people; change or delete a person</td></tr>
+  <tr><td><code>POST /api/speakers/{id}/samples</code></td><td>sample from a WAV file</td></tr>
+  <tr><td><code>POST /api/speakers/{id}/samples/last</code>, <code>DELETE …/samples/{n}</code></td><td>last utterance as a sample; delete a sample</td></tr>
+  <tr><td><code>POST/DELETE /api/enrollment</code></td><td>start and stop enrollment</td></tr>
+  <tr><td><code>GET /api/last</code>, <code>GET /api/last.wav</code></td><td>result and recording of the last utterance (from RAM)</td></tr>
+  <tr><td><code>POST /api/identify</code></td><td>identify the speaker of an uploaded WAV file</td></tr>
+  <tr><td><code>POST /api/calibrate</code></td><td>calibration report</td></tr>
+</table></div>
+
+<h2 id="limitations">12. Limitations</h2>
+<ul>
+  <li><strong>Short commands</strong> ("Yes", "Stop", under 1 s of speech) give "unknown".</li>
+  <li><strong>The wake word is not used:</strong> the satellite detects it itself and sends only the
+    command. Recognition does not depend on the words, but it needs at least a second of speech.</li>
+  <li><strong>Typed text</strong> in the app has no speaker.</li>
+  <li><strong>Several people at once:</strong> when two people speak at the same time, the result
+    refers to the dominant voice or comes out "unknown".</li>
+  <li><strong>Spoken prompts</strong> (e.g. during enrollment) are in Polish and English, and Assist
+    Router keywords are in Polish; the recognition method itself works for any language.</li>
+</ul>
+<p class="warn"><strong>This is a convenience, not security.</strong> A voice can be recorded and
+replayed, and siblings can sound very much alike. Do not use the speaker to unlock doors, disarm an
+alarm or anything else that requires authentication.</p>
+
+<h2 id="privacy">13. Privacy</h2>
+<p>A voiceprint is biometric data (GDPR, Article 9). Therefore:</p>
+<ul>
+  <li>everything runs <strong>locally</strong>, with no cloud;</li>
+  <li>the service stores <strong>only vectors</strong> (<code>/data/speakers.json</code>), no
+    recordings (a vector describes the timbre of a voice, but is not a recording);</li>
+  <li>the last utterance is kept only in memory, for at most 10 minutes (for
+    <code>add_last_sample</code> and announcements);</li>
+  <li>the utterance text does not go into the sensor history;</li>
+  <li><code>delete_speaker</code> removes a person's voiceprint completely;</li>
+  <li>household members – and parents, for children – should know about the recognition and agree
+    to it.</li>
+</ul>
+
+<footer>Assist Speaker ID (integration <code>speaker_id</code>, service
+<code>wyoming-speaker-id</code>). Apache-2.0 license. 3D-Speaker CAM++ model: Apache-2.0, via
+<a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a>. Changes: <code>CHANGELOG.md</code>.
+Issues: on the GitHub repository.</footer>
+</div>
+</body>
+</html>

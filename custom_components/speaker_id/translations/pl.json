@@ -71,7 +71,7 @@
           "threshold": "Dla osób bez własnego progu. Typowo 0,5-0,7.",
           "margin": "O ile najlepsza osoba musi wyprzedzać drugą (0,05 = 5 punktów procentowych). Większy przy podobnych głosach, np. rodzeństwa.",
           "min_speech": "Krótsza wypowiedź to zawsze „nieznany”: za mało mowy, żeby rozpoznać głos.",
-          "probable_threshold": "Nierozpoznany głos o co najmniej takim podobieństwie jest podawany jako „prawdopodobnie <osoba>” (atrybuty czujnika probable_person i probable_user_id, Assist Router odpowiada „Wydaje mi się, że pyta Anna”). Nigdy nie działa jako użytkownik tej osoby."
+          "probable_threshold": "Nierozpoznany głos o co najmniej takim podobieństwie jest podawany jako „prawdopodobnie Anna” (atrybuty czujnika probable_person i probable_user_id, Assist Router odpowiada „Wydaje mi się, że pyta Anna”). Nigdy nie działa jako użytkownik tej osoby."
         }
       }
     },

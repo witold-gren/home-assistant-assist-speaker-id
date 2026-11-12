@@ -271,6 +271,10 @@ changes, instead of reading the text with a Piper voice.
   „komunikat” ("message"), „do wszystkich” ("to everyone"), „intercom” at the start of a
   sentence and calls this function (Assist Router currently understands Polish). The speaker
   that recorded only replies „Ogłoszenie wysłane.” ("Announcement sent.").
+- **For another integration:** `async_last_recording(hass)` returns the WAV of the last utterance
+  (or `None` without a fresh one); Assist Router hands it to the
+  [Intercom](https://github.com/witold-gren/home-assistant-intercom) integration, which plays it in
+  the rooms named in the sentence.
 - **Important:** in the pipeline turn off "Prefer handling commands locally". Otherwise HA's
   built-in broadcast intent catches "Announcement, …" before the agent and reads the text
   with synthesis. For the same reason the agent would not be able to answer briefly during

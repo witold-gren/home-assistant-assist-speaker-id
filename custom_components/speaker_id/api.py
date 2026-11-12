@@ -69,6 +69,21 @@ def enrollment_reply(hass: HomeAssistant) -> tuple[str, bool] | None:
     return text["sample"].format(**values), True
 
 
+async def async_last_recording(hass: HomeAssistant, max_age: float | None = None) -> bytes | None:
+    """The last utterance as a WAV (the speaker's own voice, unchanged), for another
+    integration to play, e.g. an intercom; None when there is no fresh one (text typed by
+    hand, or older than ``max_age`` seconds, by default the age of an announcement)."""
+    from .announcement import MAX_AGE
+
+    for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+        try:
+            wav, age = await entry.runtime_data.client.last_audio()
+        except (LookupError, SpeakerIdError):
+            return None
+        return wav if age <= (MAX_AGE if max_age is None else max_age) else None
+    return None
+
+
 async def async_announce_last(
     hass: HomeAssistant,
     *,

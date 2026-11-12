@@ -3,6 +3,14 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [SemVer](https://semver.org/).
 Add-on (service) changes: [speaker_id/CHANGELOG.md](speaker_id/CHANGELOG.md).
 
+## [0.2.1] - 2026-11-12
+
+### Added
+- `async_last_recording(hass, max_age=None)` in `api.py`: the WAV of the last utterance for another
+  integration to play, e.g. the [Intercom](https://github.com/witold-gren/home-assistant-intercom)
+  through Assist Router („Komunikat do kuchni, ...” in the speaker's own voice); None without a
+  fresh one.
+
 ## [0.2.0] - 2026-10-25
 
 ### Added

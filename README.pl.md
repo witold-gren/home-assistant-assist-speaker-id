@@ -269,6 +269,10 @@ zmian, zamiast czytać tekst głosem Pipera.
   nagrania (np. tekst wpisany ręcznie). Assist Router rozpoznaje „ogłoszenie”,
   „komunikat”, „do wszystkich”, „intercom” na początku zdania i woła tę funkcję. Głośnik,
   który nagrał, odpowiada tylko „Ogłoszenie wysłane.”.
+- **Dla innej integracji:** `async_last_recording(hass)` zwraca WAV ostatniej wypowiedzi (albo
+  `None`, gdy nie ma świeżej); Assist Router przekazuje go integracji
+  [Intercom](https://github.com/witold-gren/home-assistant-intercom), która odtwarza go w pokojach
+  wymienionych w zdaniu.
 - **Ważne:** w potoku wyłącz „Preferuj obsługę poleceń lokalnie”. Inaczej wbudowana
   intencja rozgłaszania HA złapie „Ogłoszenie, …” przed agentem i przeczyta tekst
   syntezą. Z tego samego powodu agent nie zdąży wtedy odpowiedzieć krótko przy

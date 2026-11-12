@@ -856,6 +856,21 @@ async def test_announce_without_recording(
         await hass.services.async_call(DOMAIN, "announce_last", {}, blocking=True)
 
 
+async def test_last_recording_for_another_integration(
+    hass: HomeAssistant, stack: Stack, entry: MockConfigEntry
+) -> None:
+    """An intercom plays the speaker's own recording: the WAV of the last utterance."""
+    from custom_components.speaker_id.api import async_last_recording
+
+    await _setup(hass, entry)
+    assert await async_last_recording(hass) is None  # text typed by hand - no recording
+    audio = pcm(voice(220, seconds=2.0))
+    await _transcribe(hass, audio)
+    wav = await async_last_recording(hass)
+    assert wav is not None and wav[:4] == b"RIFF" and len(wav) > len(audio) // 2
+    assert await async_last_recording(hass, max_age=-1) is None  # too old
+
+
 async def test_unknown_announcement_token(
     hass: HomeAssistant, stack: Stack, entry: MockConfigEntry, hass_client
 ) -> None:

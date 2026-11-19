@@ -60,6 +60,19 @@ MESSAGES = {
         "done": "Done. Voiceprint of {name}: {total} samples.",
         "stopped": "Stopping the enrollment. Saved {total} of {target}.",
     },
+    "fr": {
+        "start": "J'enregistre une empreinte vocale pour {name}. Dites une commande "
+        "normale, par exemple : quel temps fera-t-il demain.",
+        "start_more": "J'ajoute des échantillons de voix pour {name} : {total} enregistrés, "
+        "jusqu'à {target}. Dites une commande normale.",
+        "next": "{total} sur {target} enregistrés. Phrase suivante.",
+        "sample": "{total} sur {target} enregistrés. Phrase suivante.",
+        "short": "Trop court. Dites une phrase plus longue, quelques mots.",
+        "silence": "Je n'ai rien entendu. Dites une phrase, quelques mots.",
+        "continue": "Phrase suivante.",
+        "done": "Terminé. Empreinte vocale de {name} : {total} échantillons.",
+        "stopped": "J'arrête l'enregistrement. {total} sur {target} enregistrés.",
+    },
 }
 
 

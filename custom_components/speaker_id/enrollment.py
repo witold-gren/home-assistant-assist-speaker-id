@@ -55,6 +55,20 @@ TEXTS = {
         "Assist Speaker ID → Configure. Margin: {margin}.",
         "empty": "No voices recorded yet. Choose a person and a satellite, then Start recording.",
     },
+    "fr": {
+        "title": "Assist Speaker ID : calibrage",
+        "head": "| Personne | Échantillons | Pire propre | Plus proche étranger | Séparables "
+        "| Seuil suggéré |",
+        "yes": "oui",
+        "no": "**non**",
+        "few": "Pas assez d'échantillons",
+        "all_separable": "Toutes les voix sont distinguables.",
+        "overlap": "Certaines voix sont trop proches ({names}), enregistrez plus d'échantillons.",
+        "hint": "Réglez le seuil dans les options de l'intégration : "
+        "Paramètres → Appareils et services → Assist Speaker ID → Configurer. Marge : {margin}.",
+        "empty": "Aucune voix enregistrée. Choisissez une personne et un satellite, puis Démarrer "
+        "l'enregistrement.",
+    },
 }
 
 
